@@ -1,0 +1,88 @@
+# 科研管理平台 SQL 脚本变更日志
+
+> 数据库：达梦 DM8（Oracle 方言兼容）
+> 脚本目录：`sql/kys/`
+
+---
+
+## V1.0.1 — 字典数据初始化
+
+**日期**：2026-07-08
+
+**变更内容**：
+
+1. 新增 18 个业务字典类型（`sys_dict_type`，dict_id 200–217）：
+   - `project_status`：课题状态（立项/在研/结题/评审/归档）
+   - `project_stage`：课题阶段（立项/节点考核/结题/评审）
+   - `expense_category`：经费类别（设备费/材料费/差旅费/劳务费/测试化验加工费/出版文献信息传播/其他）
+   - `contract_type`：合同类型（研究/服务/采购）
+   - `node_type`：节点类型（付款/交付/验收）
+   - `approval_status`：审批状态（审核中/已通过/驳回）
+   - `cooperation_type`：合作类型（牵头/参与/协作）
+   - `honor_level`：荣誉级别（国家级/省部级/国铁集团级/集团公司级/所级）
+   - `honor_type`：荣誉类型（集体/个人）
+   - `alert_type`：预警类型（合同节点/经费超限/资料逾期）
+   - `alert_level`：预警级别（普通/重要/紧急）
+   - `member_role`：课题成员角色（主持人/参与人）
+   - `edu_level`：学历（本科/硕士/博士）
+   - `title_level`：职称（初级/中级/副高/正高）
+   - `rd_alloc_status`：研发分摊状态（草稿/已确认）
+   - `rd_surcharge_rate`：工资附加费比例（10 项）
+   - `unit_type`：单位类型（内部单位/外部单位）
+   - `external_unit_type`：外部单位类型（公司/学校/其他）
+
+2. 新增 67 条字典数据项（`sys_dict_data`，dict_code 20001–20067），每项含 `list_class` 样式标签。
+
+3. 新增 10 条工资附加费比例数据（`surcharge_rate` 表），包含职工教育经费、工会经费、基本医疗保险费等 10 项计提比例。
+
+**依赖**：
+- 若依框架 `sys_dict_type` / `sys_dict_data` 表（已通过 `ruoyi-dm8.dmp` 导入）
+- V1.0.0 `surcharge_rate` 表
+
+---
+
+## V1.0.0 — 基础表 DDL
+
+**日期**：2026-07-08
+
+**变更内容**：
+
+1. 创建 25 张业务表 DDL，适配达梦 DM8 兼容语法：
+   - **模块一**（若依框架基础表，4 张）：`sys_user`、`sys_dept`、`sys_role`、`sys_user_role`
+     - 注意：已通过 `ruoyi-dm8.dmp` 导入，如已存在请跳过
+   - **模块二**（科研人员管理，1 张）：`researcher_profile`
+   - **模块三**（课题管理，3 张）：`project`、`project_member`、`project_document`
+   - **模块四**（合同管理，2 张）：`contract`、`contract_node`
+   - **模块五**（经费管理，2 张）：`budget_split`、`expense`
+   - **模块六**（审批管理，2 张）：`approval`、`approval_history`
+   - **模块七**（合作单位管理，2 张）：`cooperative_unit`、`project_unit`
+   - **模块八**（荣誉管理，2 张）：`honor`、`honor_relation`
+   - **模块九**（预警与通知，2 张）：`alert`、`notification`
+   - **模块十**（研发人工费管理，5 张）：`rd_labor_budget`、`rd_researcher_salary`、`rd_worktime_daily`、`rd_worktime_monthly`、`rd_labor_allocation`
+
+2. 创建附加配置表 1 张：`surcharge_rate`（工资附加费比例配置表）
+
+3. 创建触发器 1 个：`trg_expense_after_insert`（经费记账后自动扣减课题预算余额）
+
+4. 创建视图 1 个：`v_researcher_profile`（科研人员扩展信息联合查询）
+
+**适配要点**：
+- 自增主键统一使用 `IDENTITY(1,1)`（达梦原生自增，无需序列）
+- 移除所有外键约束（若依规范，应用层保证关联完整性）
+- 每张表增加 `del_flag CHAR(1) DEFAULT '0'` 逻辑删除字段
+- 每张表增加 `create_by`/`create_time`/`update_by`/`update_time` 审计字段
+- 根据字典类型补充了以下字段：`contract.contract_type`、`contract_node.node_type`、`honor.honor_type`、`cooperative_unit.unit_type`/`external_unit_type`
+- 触发器使用 Oracle 风格 `BEGIN...END` 语法（达梦兼容）
+- 视图使用标准 `CREATE OR REPLACE VIEW` 语法
+
+**数据类型**：BIGINT / VARCHAR / DECIMAL / DATE / TIMESTAMP / CHAR / INT（均为达梦 DM8 原生支持类型）
+
+---
+
+## 脚本执行顺序
+
+| 序号 | 脚本 | 说明 |
+|------|------|------|
+| 0 | `ruoyi-dm8.dmp` | 若依框架基础表与初始数据（数据泵导入） |
+| 1 | `V1.0.0__base_tables.sql` | 科研管理平台 25 张业务表 DDL |
+| 2 | `V1.0.1__dict_data.sql` | 业务字典数据初始化 |
