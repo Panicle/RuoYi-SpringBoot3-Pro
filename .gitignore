@@ -55,3 +55,6 @@ pnpm-lock.yaml
 
 application-demodev.yml
 application-demoprod.yml
+
+# 本地 jar 文件（防止误提交大文件）
+/*.jar
