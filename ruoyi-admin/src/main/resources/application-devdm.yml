@@ -14,8 +14,9 @@ spring:
       # 主库数据源
       master:
         url: jdbc:dm://localhost:5236?schema=RUOYI
-        username: ruoyi
-        password: jyx123
+        username: SYSDBA
+        password: Ruoyi12345
+        # 注：RUOYI dmp 已用 SYSDBA 导入，schema 名 RUOYI 数据归 SYSDBA 所有
       # 从库数据源
       slave:
         # 从数据源开关/默认关闭
