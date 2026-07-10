@@ -1,0 +1,2 @@
+DROP USER "RUOYI" CASCADE;
+exit
