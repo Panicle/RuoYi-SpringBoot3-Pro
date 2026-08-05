@@ -169,32 +169,38 @@ CREATE INDEX idx_sys_user_role_role_id ON sys_user_role (role_id);
 -- 5. 科研人员扩展表 biz_user_profile
 -- ----------------------------
 CREATE TABLE biz_user_profile (
-    profile_id     BIGINT IDENTITY(1,1) NOT NULL,
-    user_id        BIGINT       NOT NULL,
-    education      VARCHAR(50)  DEFAULT NULL,
-    title          VARCHAR(50)  DEFAULT NULL,
-    research_field VARCHAR(200) DEFAULT NULL,
-    office_phone   VARCHAR(20)  DEFAULT NULL,
-    del_flag       CHAR(1)      DEFAULT '0',
-    create_by      VARCHAR(64)  DEFAULT '',
-    create_time    TIMESTAMP    DEFAULT NULL,
-    update_by      VARCHAR(64)  DEFAULT '',
-    update_time    TIMESTAMP    DEFAULT NULL,
+    profile_id         BIGINT IDENTITY(1,1) NOT NULL,
+    user_id            BIGINT       NOT NULL,
+    edu_level          VARCHAR(20)  DEFAULT NULL,
+    title_level        VARCHAR(20)  DEFAULT NULL,
+    research_direction VARCHAR(200) DEFAULT NULL,
+    research_area      VARCHAR(200) DEFAULT NULL,
+    id_number          VARCHAR(18)  DEFAULT NULL,
+    entry_date         DATE         DEFAULT NULL,
+    office_phone       VARCHAR(20)  DEFAULT NULL,
+    del_flag           CHAR(1)      DEFAULT '0',
+    create_by          VARCHAR(64)  DEFAULT '',
+    create_time        TIMESTAMP    DEFAULT NULL,
+    update_by          VARCHAR(64)  DEFAULT '',
+    update_time        TIMESTAMP    DEFAULT NULL,
     PRIMARY KEY (profile_id)
 );
 
 COMMENT ON TABLE  biz_user_profile IS '科研人员扩展表';
-COMMENT ON COLUMN biz_user_profile.profile_id     IS '档案ID';
-COMMENT ON COLUMN biz_user_profile.user_id        IS '关联系统用户ID';
-COMMENT ON COLUMN biz_user_profile.education      IS '学历（对应字典 edu_level）';
-COMMENT ON COLUMN biz_user_profile.title          IS '职称（对应字典 title_level）';
-COMMENT ON COLUMN biz_user_profile.research_field IS '研究领域';
-COMMENT ON COLUMN biz_user_profile.office_phone   IS '办公电话';
-COMMENT ON COLUMN biz_user_profile.del_flag       IS '删除标志（0存在 2删除）';
-COMMENT ON COLUMN biz_user_profile.create_by      IS '创建者';
-COMMENT ON COLUMN biz_user_profile.create_time    IS '创建时间';
-COMMENT ON COLUMN biz_user_profile.update_by      IS '更新者';
-COMMENT ON COLUMN biz_user_profile.update_time    IS '更新时间';
+COMMENT ON COLUMN biz_user_profile.profile_id         IS '档案ID';
+COMMENT ON COLUMN biz_user_profile.user_id            IS '关联系统用户ID';
+COMMENT ON COLUMN biz_user_profile.edu_level          IS '学历（对应字典 edu_level）';
+COMMENT ON COLUMN biz_user_profile.title_level        IS '职称等级（对应字典 title_level）';
+COMMENT ON COLUMN biz_user_profile.research_direction IS '研究方向';
+COMMENT ON COLUMN biz_user_profile.research_area      IS '研究领域';
+COMMENT ON COLUMN biz_user_profile.id_number          IS '身份证号';
+COMMENT ON COLUMN biz_user_profile.entry_date         IS '入职日期';
+COMMENT ON COLUMN biz_user_profile.office_phone       IS '办公电话';
+COMMENT ON COLUMN biz_user_profile.del_flag           IS '删除标志（0存在 2删除）';
+COMMENT ON COLUMN biz_user_profile.create_by          IS '创建者';
+COMMENT ON COLUMN biz_user_profile.create_time        IS '创建时间';
+COMMENT ON COLUMN biz_user_profile.update_by          IS '更新者';
+COMMENT ON COLUMN biz_user_profile.update_time        IS '更新时间';
 
 CREATE UNIQUE INDEX idx_biz_user_profile_user_id ON biz_user_profile (user_id);
 
@@ -1009,9 +1015,12 @@ SELECT
     r.role_name,
     r.role_key,
     rp.profile_id,
-    rp.education,
-    rp.title,
-    rp.research_field,
+    rp.edu_level,
+    rp.title_level,
+    rp.research_direction,
+    rp.research_area,
+    rp.id_number,
+    rp.entry_date,
     rp.office_phone
 FROM sys_user u
 LEFT JOIN sys_dept d          ON u.dept_id = d.dept_id
