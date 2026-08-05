@@ -41,6 +41,27 @@
 
 ---
 
+## V1.0.2 — 菜单权限初始化
+
+**日期**：2026-08-05
+
+**变更内容**：
+
+1. 新增科研管理业务目录与阶段1科研人员管理菜单权限（`sys_menu` / `sys_role_menu`）：
+   - 科研管理目录（menu_id=2000, menu_type='M'）
+   - 科研人员管理菜单（menu_id=2001, menu_type='C', perms='biz:userProfile:list'）
+   - 7个按钮权限（menu_id=2002–2007, menu_type='F'）：查询/新增/修改/删除/导出/导入
+   - 权限标识统一格式：`biz:userProfile:{action}`
+
+2. 管理员角色 role_id=1 挂载全部菜单（`sys_role_menu`）。
+
+3. 幂等设计：使用 `INSERT ... SELECT ... WHERE NOT EXISTS`，可重复执行。
+
+**依赖**：
+- 若依框架 `sys_menu` / `sys_role_menu` 表（已通过 `ruoyi-dm8.dmp` 导入）
+
+---
+
 ## V1.0.0 — 基础表 DDL
 
 **日期**：2026-07-08
@@ -50,7 +71,7 @@
 1. 创建 25 张业务表 DDL，适配达梦 DM8 兼容语法：
    - **模块一**（若依框架基础表，4 张）：`sys_user`、`sys_dept`、`sys_role`、`sys_user_role`
      - 注意：已通过 `ruoyi-dm8.dmp` 导入，如已存在请跳过
-   - **模块二**（科研人员管理，1 张）：`researcher_profile`
+   - **模块二**（科研人员管理，1 张）：`biz_user_profile`
    - **模块三**（课题管理，3 张）：`project`、`project_member`、`project_document`
    - **模块四**（合同管理，2 张）：`contract`、`contract_node`
    - **模块五**（经费管理，2 张）：`budget_split`、`expense`
@@ -64,7 +85,7 @@
 
 3. 创建触发器 1 个：`trg_expense_after_insert`（经费记账后自动扣减课题预算余额）
 
-4. 创建视图 1 个：`v_researcher_profile`（科研人员扩展信息联合查询）
+4. 创建视图 1 个：`v_biz_user_profile`（科研人员扩展信息联合查询）
 
 **适配要点**：
 - 自增主键统一使用 `IDENTITY(1,1)`（达梦原生自增，无需序列）
@@ -86,3 +107,5 @@
 | 0 | `ruoyi-dm8.dmp` | 若依框架基础表与初始数据（数据泵导入） |
 | 1 | `V1.0.0__base_tables.sql` | 科研管理平台 25 张业务表 DDL |
 | 2 | `V1.0.1__dict_data.sql` | 业务字典数据初始化 |
+| 3 | `V1.0.2__menu_permissions.sql` | 科研管理菜单与按钮权限 |
+| 4 | `V1.0.3__views.sql` | 业务视图（v_biz_user_profile 等） |

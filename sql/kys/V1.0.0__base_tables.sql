@@ -166,9 +166,9 @@ CREATE INDEX idx_sys_user_role_role_id ON sys_user_role (role_id);
 -- ============================================================================
 
 -- ----------------------------
--- 5. 科研人员扩展表 researcher_profile
+-- 5. 科研人员扩展表 biz_user_profile
 -- ----------------------------
-CREATE TABLE researcher_profile (
+CREATE TABLE biz_user_profile (
     profile_id     BIGINT IDENTITY(1,1) NOT NULL,
     user_id        BIGINT       NOT NULL,
     education      VARCHAR(50)  DEFAULT NULL,
@@ -183,20 +183,20 @@ CREATE TABLE researcher_profile (
     PRIMARY KEY (profile_id)
 );
 
-COMMENT ON TABLE  researcher_profile IS '科研人员扩展表';
-COMMENT ON COLUMN researcher_profile.profile_id     IS '档案ID';
-COMMENT ON COLUMN researcher_profile.user_id        IS '关联系统用户ID';
-COMMENT ON COLUMN researcher_profile.education      IS '学历（对应字典 edu_level）';
-COMMENT ON COLUMN researcher_profile.title          IS '职称（对应字典 title_level）';
-COMMENT ON COLUMN researcher_profile.research_field IS '研究领域';
-COMMENT ON COLUMN researcher_profile.office_phone   IS '办公电话';
-COMMENT ON COLUMN researcher_profile.del_flag       IS '删除标志（0存在 2删除）';
-COMMENT ON COLUMN researcher_profile.create_by      IS '创建者';
-COMMENT ON COLUMN researcher_profile.create_time    IS '创建时间';
-COMMENT ON COLUMN researcher_profile.update_by      IS '更新者';
-COMMENT ON COLUMN researcher_profile.update_time    IS '更新时间';
+COMMENT ON TABLE  biz_user_profile IS '科研人员扩展表';
+COMMENT ON COLUMN biz_user_profile.profile_id     IS '档案ID';
+COMMENT ON COLUMN biz_user_profile.user_id        IS '关联系统用户ID';
+COMMENT ON COLUMN biz_user_profile.education      IS '学历（对应字典 edu_level）';
+COMMENT ON COLUMN biz_user_profile.title          IS '职称（对应字典 title_level）';
+COMMENT ON COLUMN biz_user_profile.research_field IS '研究领域';
+COMMENT ON COLUMN biz_user_profile.office_phone   IS '办公电话';
+COMMENT ON COLUMN biz_user_profile.del_flag       IS '删除标志（0存在 2删除）';
+COMMENT ON COLUMN biz_user_profile.create_by      IS '创建者';
+COMMENT ON COLUMN biz_user_profile.create_time    IS '创建时间';
+COMMENT ON COLUMN biz_user_profile.update_by      IS '更新者';
+COMMENT ON COLUMN biz_user_profile.update_time    IS '更新时间';
 
-CREATE UNIQUE INDEX idx_researcher_profile_user_id ON researcher_profile (user_id);
+CREATE UNIQUE INDEX idx_biz_user_profile_user_id ON biz_user_profile (user_id);
 
 -- ============================================================================
 -- 模块三：课题管理（3张）
@@ -992,10 +992,10 @@ END;
 -- ============================================================================
 
 -- ----------------------------
--- 视图：v_researcher_profile
+-- 视图：v_biz_user_profile
 -- 功能：科研人员扩展信息联合查询（用户表 + 部门表 + 角色表 + 科研人员扩展表）
 -- ----------------------------
-CREATE OR REPLACE VIEW v_researcher_profile AS
+CREATE OR REPLACE VIEW v_biz_user_profile AS
 SELECT
     u.user_id,
     u.user_name,
@@ -1017,10 +1017,10 @@ FROM sys_user u
 LEFT JOIN sys_dept d          ON u.dept_id = d.dept_id
 LEFT JOIN sys_user_role ur    ON u.user_id = ur.user_id
 LEFT JOIN sys_role r          ON ur.role_id = r.role_id
-LEFT JOIN researcher_profile rp ON u.user_id = rp.user_id
+LEFT JOIN biz_user_profile rp ON u.user_id = rp.user_id
 WHERE u.del_flag = '0';
 
-COMMENT ON TABLE v_researcher_profile IS '科研人员扩展信息联合查询视图';
+COMMENT ON TABLE v_biz_user_profile IS '科研人员扩展信息联合查询视图';
 
 -- ============================================================================
 -- 完
