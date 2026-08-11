@@ -37,6 +37,8 @@
     <select id="selectUserProfileViewList" parameterType="UserProfile" resultMap="UserProfileResult">
         <include refid="selectUserProfileVo"/>
         <where>
+            <!-- 自定义 XML 不走 @TableLogic 自动过滤，显式声明 -->
+            and p.del_flag = '0'
             <if test="userId != null"> and p.user_id = #{userId} </if>
             <if test="nickName != null and nickName != ''"> and u.nick_name like concat('%', #{nickName}, '%') </if>
             <if test="eduLevel != null and eduLevel != ''"> and p.edu_level = #{eduLevel} </if>
@@ -57,7 +59,7 @@
 
     <select id="selectUserProfileViewById" parameterType="Long" resultMap="UserProfileResult">
         <include refid="selectUserProfileVo"/>
-        where p.profile_id = #{profileId}
+        where p.del_flag = '0' and p.profile_id = #{profileId}
     </select>
 
 </mapper>

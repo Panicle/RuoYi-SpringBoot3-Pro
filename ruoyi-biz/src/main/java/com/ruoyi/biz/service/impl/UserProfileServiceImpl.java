@@ -45,7 +45,7 @@ public class UserProfileServiceImpl extends ServiceImpl<UserProfileMapper, UserP
     }
 
     /**
-     * 新增：校验 userId 非空、且不存在有效档案后插入
+     * 新增：校验 userId 非空、且不存在有效档案后插入；delFlag 由本方法显式置 "0"（双保险，不依赖 DB 默认值）
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -57,6 +57,10 @@ public class UserProfileServiceImpl extends ServiceImpl<UserProfileMapper, UserP
                 new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, researcher.getUserId()));
         if (existing != null) {
             throw new ServiceException("userId=" + researcher.getUserId() + " 的档案已存在");
+        }
+        // delFlag 双保险：显式置 "0"，避免无 MetaObjectHandler 时依赖 DB 默认值
+        if (StringUtils.isEmpty(researcher.getDelFlag())) {
+            researcher.setDelFlag("0");
         }
         return userProfileMapper.insert(researcher);
     }

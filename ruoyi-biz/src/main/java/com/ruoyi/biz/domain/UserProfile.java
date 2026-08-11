@@ -1,6 +1,5 @@
 package com.ruoyi.biz.domain;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -32,6 +31,7 @@ public class UserProfile extends BaseEntity {
     private Long profileId;
 
     /** 用户ID（关联 sys_user.user_id） */
+    @Excel(name = "用户ID")
     @TableField("user_id")
     private Long userId;
 
@@ -70,8 +70,8 @@ public class UserProfile extends BaseEntity {
     private String officePhone;
 
     /** 删除标志（0代表存在 2代表删除） */
-    @TableLogic
-    @TableField(value = "del_flag", fill = FieldFill.INSERT)
+    @TableLogic(value = "0", delval = "2")
+    @TableField("del_flag")
     private String delFlag;
 
     // ====== 视图关联字段（来自 sys_user / sys_dept JOIN，非 biz_user_profile 字段） ======
