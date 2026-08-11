@@ -5,6 +5,26 @@
 
 ---
 
+## 执行记录（各环境实际执行登记，每次执行后必须更新）
+
+| 序号 | 脚本 | 执行环境 | 执行人 | 执行时间 | 结果 |
+|---|---|---|---|---|---|
+| 1 | V1.0.0__base_tables.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-11 | ✅ 22张业务表 + v_biz_user_profile 视图创建成功 |
+| 2 | V1.0.1__dict_data.sql | devdm | Claude Code | 2026-08-11 | ✅ 18字典类型 + 67字典数据 + 10项附加费比例 |
+| 3 | V1.0.2__menu_permissions.sql | devdm | Claude Code | 2026-08-11 | ✅ 8个菜单（2000-2007），挂载 admin |
+| 4 | V1.0.3__views.sql | devdm | Claude Code | 2026-08-11 | ✅ 视图重建（幂等） |
+| 5 | V1.0.4__roles.sql | devdm | Claude Code | 2026-08-11 | ✅ 6业务角色（100-105）+ 29条角色菜单挂载 |
+
+**2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
+1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
+2. 达梦不支持对视图执行 `COMMENT ON TABLE` → 相关语句改为注释
+3. 移除 `trg_expense_after_insert` 触发器（阶段0任务卡决策：经费核减走 Service 层事务）
+4. 22张业务表统一补 `remark VARCHAR(500)` 列（适配 BaseEntity，否则 MyBatis-Plus selectById 报列不存在）
+
+复查方式：`python .tmp/check_db.py`（22表/视图/字典/菜单/角色/附加费全项检查，2026-08-11 全绿通过）。
+
+---
+
 ## V1.0.1 — 字典数据初始化
 
 **日期**：2026-07-08
