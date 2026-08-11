@@ -21,9 +21,11 @@ SELECT
     rp.profile_id,
     rp.edu_level,
     rp.title_level,
+    rp.degree,
+    rp.major,
+    rp.bio,
     rp.research_direction,
     rp.research_area,
-    rp.id_number,
     rp.entry_date,
     rp.office_phone
 FROM sys_user u

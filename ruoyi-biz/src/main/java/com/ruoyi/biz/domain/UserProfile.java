@@ -45,19 +45,29 @@ public class UserProfile extends BaseEntity {
     @TableField("title_level")
     private String titleLevel;
 
-    /** 研究方向 */
-    @Excel(name = "研究方向")
+    /** 研究方向（字典：research_direction，大写如 BEIDONG / AI / IOT） */
+    @Excel(name = "研究方向", dictType = "research_direction")
     @TableField("research_direction")
     private String researchDirection;
 
-    /** 研究领域 */
-    @Excel(name = "研究领域")
+    /** 研究领域（字典：research_area，大写如 CHEWU / JIWU / GONGWU） */
+    @Excel(name = "研究领域", dictType = "research_area")
     @TableField("research_area")
     private String researchArea;
 
-    /** 身份证号 */
-    @TableField("id_number")
-    private String idNumber;
+    /** 学位（字典：degree_level，大写如 BACHELOR / MASTER / DOCTOR） */
+    @Excel(name = "学位", dictType = "degree_level")
+    @TableField("degree")
+    private String degree;
+
+    /** 专业 */
+    @Excel(name = "专业")
+    @TableField("major")
+    private String major;
+
+    /** 个人简介 */
+    @TableField("bio")
+    private String bio;
 
     /** 入职日期 */
     @JsonFormat(pattern = "yyyy-MM-dd")
