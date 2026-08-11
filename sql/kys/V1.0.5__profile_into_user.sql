@@ -62,11 +62,11 @@ SELECT 20073, 6, '房建', 'FANGJIAN','research_area', '', 'primary',  'N', '0',
 INSERT INTO sys_dict_data (dict_code, dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, remark)
 SELECT 20074, 7, '信息', 'XINXI',   'research_area', '', 'success',  'N', '0', 'admin', SYSDATE, '信息专业' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_dict_data WHERE dict_code = 20074);
 INSERT INTO sys_dict_data (dict_code, dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, remark)
-SELECT 20075, 8, '综合', 'ZONGHE',  'research_area', '', 'info',     'N', '0', 'admin', SYSDATE, '综合专业' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_dict_data WHERE dict_code = 20075);
+SELECT 20075, 8, '综合专业', 'ZONGHE',  'research_area', '', 'info',     'N', '0', 'admin', SYSDATE, '综合专业' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_dict_data WHERE dict_code = 20075);
 
 -- 3. 研究方向 research_direction（12 项，20076-20087）
 INSERT INTO sys_dict_data (dict_code, dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, remark)
-SELECT 20076, 1,  '北斗定位',     'BEIDONG',  'research_direction', '', 'primary',  'N', '0', 'admin', SYSDATE, '北斗定位方向' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_dict_data WHERE dict_code = 20076);
+SELECT 20076, 1,  '北斗定位',     'BEIDOU',   'research_direction', '', 'primary',  'N', '0', 'admin', SYSDATE, '北斗定位方向' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_dict_data WHERE dict_code = 20076);
 INSERT INTO sys_dict_data (dict_code, dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, remark)
 SELECT 20077, 2,  '人工智能',     'AI',       'research_direction', '', 'success',  'N', '0', 'admin', SYSDATE, '人工智能方向' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_dict_data WHERE dict_code = 20077);
 INSERT INTO sys_dict_data (dict_code, dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, remark)
@@ -97,6 +97,15 @@ INSERT INTO sys_dict_data (dict_code, dict_sort, dict_label, dict_value, dict_ty
 SELECT 20089, 2, '硕士', 'MASTER',   'degree_level', '', 'primary',  'N', '0', 'admin', SYSDATE, '硕士学位' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_dict_data WHERE dict_code = 20089);
 INSERT INTO sys_dict_data (dict_code, dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, remark)
 SELECT 20090, 3, '博士', 'DOCTOR',   'degree_level', '', 'success',  'N', '0', 'admin', SYSDATE, '博士学位' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_dict_data WHERE dict_code = 20090);
+
+-- 5. 历史数据修正（幂等 UPDATE；WHERE NOT EXISTS 守护的 INSERT 不会更新已有错行）
+--    V1.0.5 首次发布曾把 dict_value 写成 BEIDONG，应为 BEIDOU；
+--    dict_label 写成'综合'，应为'综合专业'。下列 UPDATE 仅作用于错行，重跑无副作用。
+UPDATE sys_dict_data SET dict_value = 'BEIDOU'
+ WHERE dict_type = 'research_direction' AND dict_value = 'BEIDONG';
+
+UPDATE sys_dict_data SET dict_label = '综合专业'
+ WHERE dict_type = 'research_area' AND dict_value = 'ZONGHE' AND dict_label <> '综合专业';
 
 -- ============================================================================
 -- 三、菜单调整（科研档案并入用户管理）

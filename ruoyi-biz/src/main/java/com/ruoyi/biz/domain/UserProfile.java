@@ -45,7 +45,7 @@ public class UserProfile extends BaseEntity {
     @TableField("title_level")
     private String titleLevel;
 
-    /** 研究方向（字典：research_direction，大写如 BEIDONG / AI / IOT） */
+    /** 研究方向（字典：research_direction，大写如 BEIDOU / AI / IOT） */
     @Excel(name = "研究方向", dictType = "research_direction")
     @TableField("research_direction")
     private String researchDirection;
