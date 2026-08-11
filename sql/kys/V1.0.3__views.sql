@@ -33,4 +33,4 @@ LEFT JOIN sys_role r          ON ur.role_id = r.role_id
 LEFT JOIN biz_user_profile rp ON u.user_id = rp.user_id
 WHERE u.del_flag = '0';
 
-COMMENT ON TABLE v_biz_user_profile IS '科研人员扩展信息联合查询视图';
+-- 注：达梦不支持对视图执行 COMMENT ON TABLE，视图用途见头部注释

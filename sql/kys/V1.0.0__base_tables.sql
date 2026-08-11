@@ -4,12 +4,12 @@
 -- 日期: 2026-07-08
 -- 数据库: 达梦DM8（Oracle方言兼容）
 -- 说明:
---   1. 包含25张业务表DDL，适配达梦DM8兼容语法
+--   1. 包含22张业务表DDL（另含4张若依框架表结构参考），适配达梦DM8兼容语法
 --   2. 自增主键使用 IDENTITY(1,1)（达梦原生自增，无需序列）
 --   3. 移除外键约束（若依规范，应用层保证关联完整性）
 --   4. 每张表含 del_flag CHAR(1) DEFAULT '0' 逻辑删除字段
---   5. 每张表含 create_by/create_time/update_by/update_time 审计字段
---   6. 计算列、触发器、视图保持Oracle风格语法（达梦兼容）
+--   5. 每张表含 create_by/create_time/update_by/update_time 审计字段 + remark 备注字段（适配 BaseEntity）
+--   6. 视图保持Oracle风格语法（达梦兼容）；经费核减由 Service 层事务维护，不使用触发器（2026-08-11 依阶段0任务卡决策移除 trg_expense_after_insert）
 -- ============================================================================
 
 -- ============================================================================
@@ -183,6 +183,7 @@ CREATE TABLE biz_user_profile (
     create_time        TIMESTAMP    DEFAULT NULL,
     update_by          VARCHAR(64)  DEFAULT '',
     update_time        TIMESTAMP    DEFAULT NULL,
+    remark             VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (profile_id)
 );
 
@@ -226,6 +227,7 @@ CREATE TABLE project (
     create_time     TIMESTAMP      DEFAULT NULL,
     update_by       VARCHAR(64)    DEFAULT '',
     update_time     TIMESTAMP      DEFAULT NULL,
+    remark          VARCHAR(500)   DEFAULT NULL,
     PRIMARY KEY (project_id)
 );
 
@@ -234,7 +236,7 @@ COMMENT ON COLUMN project.project_id     IS '课题ID';
 COMMENT ON COLUMN project.project_name   IS '课题名称';
 COMMENT ON COLUMN project.leader_id      IS '课题负责人ID（关联sys_user.user_id）';
 COMMENT ON COLUMN project.budget_total   IS '预算总额';
-COMMENT ON COLUMN project.budget_balance IS '预算余额（由触发器维护）';
+COMMENT ON COLUMN project.budget_balance IS '预算余额（由Service层事务维护）';
 COMMENT ON COLUMN project.status         IS '状态（对应字典 project_status：DRAFT/ACTIVE/COMPLETED/ACCEPTED/ARCHIVED）';
 COMMENT ON COLUMN project.start_date     IS '开始日期';
 COMMENT ON COLUMN project.end_date       IS '结束日期';
@@ -262,6 +264,7 @@ CREATE TABLE project_member (
     create_time TIMESTAMP   DEFAULT NULL,
     update_by   VARCHAR(64) DEFAULT '',
     update_time TIMESTAMP   DEFAULT NULL,
+    remark      VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (member_id)
 );
 
@@ -296,6 +299,7 @@ CREATE TABLE project_document (
     create_time TIMESTAMP    DEFAULT NULL,
     update_by   VARCHAR(64)  DEFAULT '',
     update_time TIMESTAMP    DEFAULT NULL,
+    remark      VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (doc_id)
 );
 
@@ -337,6 +341,7 @@ CREATE TABLE contract (
     create_time   TIMESTAMP     DEFAULT NULL,
     update_by     VARCHAR(64)   DEFAULT '',
     update_time   TIMESTAMP     DEFAULT NULL,
+    remark        VARCHAR(500)  DEFAULT NULL,
     PRIMARY KEY (contract_id)
 );
 
@@ -375,6 +380,7 @@ CREATE TABLE contract_node (
     create_time TIMESTAMP    DEFAULT NULL,
     update_by   VARCHAR(64)  DEFAULT '',
     update_time TIMESTAMP    DEFAULT NULL,
+    remark      VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (node_id)
 );
 
@@ -412,6 +418,7 @@ CREATE TABLE budget_split (
     create_time   TIMESTAMP     DEFAULT NULL,
     update_by     VARCHAR(64)   DEFAULT '',
     update_time   TIMESTAMP     DEFAULT NULL,
+    remark        VARCHAR(500)  DEFAULT NULL,
     PRIMARY KEY (split_id)
 );
 
@@ -445,6 +452,7 @@ CREATE TABLE expense (
     create_time  TIMESTAMP     DEFAULT NULL,
     update_by    VARCHAR(64)   DEFAULT '',
     update_time  TIMESTAMP     DEFAULT NULL,
+    remark       VARCHAR(500)  DEFAULT NULL,
     PRIMARY KEY (expense_id)
 );
 
@@ -479,13 +487,14 @@ CREATE TABLE approval (
     applicant_id BIGINT       NOT NULL,
     approver_id  BIGINT       DEFAULT NULL,
     status       VARCHAR(20)  DEFAULT 'PENDING',
-    comment      VARCHAR(500) DEFAULT NULL,
+    comment_text VARCHAR(500) DEFAULT NULL,
     del_flag     CHAR(1)      DEFAULT '0',
     create_by    VARCHAR(64)  DEFAULT '',
     create_time  TIMESTAMP    DEFAULT NULL,
     update_by    VARCHAR(64)  DEFAULT '',
     update_time  TIMESTAMP    DEFAULT NULL,
     finish_time  TIMESTAMP    DEFAULT NULL,
+    remark       VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (approval_id)
 );
 
@@ -495,7 +504,7 @@ COMMENT ON COLUMN approval.doc_id       IS '关联资料ID';
 COMMENT ON COLUMN approval.applicant_id IS '申请人ID';
 COMMENT ON COLUMN approval.approver_id  IS '审批人ID';
 COMMENT ON COLUMN approval.status       IS '审批状态（对应字典 approval_status：PENDING/APPROVED/REJECTED）';
-COMMENT ON COLUMN approval.comment      IS '审批意见';
+COMMENT ON COLUMN approval.comment_text IS '审批意见（comment为达梦保留字，故用comment_text）';
 COMMENT ON COLUMN approval.del_flag     IS '删除标志（0存在 2删除）';
 COMMENT ON COLUMN approval.create_by    IS '创建者';
 COMMENT ON COLUMN approval.create_time  IS '创建时间';
@@ -516,13 +525,14 @@ CREATE TABLE approval_history (
     approval_id  BIGINT       NOT NULL,
     action       VARCHAR(20)  NOT NULL,
     operator_id  BIGINT       NOT NULL,
-    comment      VARCHAR(500) DEFAULT NULL,
+    comment_text VARCHAR(500) DEFAULT NULL,
     operate_time TIMESTAMP    DEFAULT NULL,
     del_flag     CHAR(1)      DEFAULT '0',
     create_by    VARCHAR(64)  DEFAULT '',
     create_time  TIMESTAMP    DEFAULT NULL,
     update_by    VARCHAR(64)  DEFAULT '',
     update_time  TIMESTAMP    DEFAULT NULL,
+    remark       VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (history_id)
 );
 
@@ -531,7 +541,7 @@ COMMENT ON COLUMN approval_history.history_id   IS '历史ID';
 COMMENT ON COLUMN approval_history.approval_id  IS '审批ID';
 COMMENT ON COLUMN approval_history.action       IS '操作类型（SUBMIT提交/APPROVE通过/REJECT驳回/TRANSFER转交）';
 COMMENT ON COLUMN approval_history.operator_id  IS '操作人ID';
-COMMENT ON COLUMN approval_history.comment      IS '审批意见';
+COMMENT ON COLUMN approval_history.comment_text IS '审批意见（comment为达梦保留字，故用comment_text）';
 COMMENT ON COLUMN approval_history.operate_time IS '操作时间';
 COMMENT ON COLUMN approval_history.del_flag     IS '删除标志（0存在 2删除）';
 COMMENT ON COLUMN approval_history.create_by    IS '创建者';
@@ -562,6 +572,7 @@ CREATE TABLE cooperative_unit (
     create_time       TIMESTAMP    DEFAULT NULL,
     update_by         VARCHAR(64)  DEFAULT '',
     update_time       TIMESTAMP    DEFAULT NULL,
+    remark            VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (unit_id)
 );
 
@@ -596,6 +607,7 @@ CREATE TABLE project_unit (
     create_time      TIMESTAMP   DEFAULT NULL,
     update_by        VARCHAR(64) DEFAULT '',
     update_time      TIMESTAMP   DEFAULT NULL,
+    remark           VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (id)
 );
 
@@ -633,6 +645,7 @@ CREATE TABLE honor (
     create_time TIMESTAMP    DEFAULT NULL,
     update_by   VARCHAR(64)  DEFAULT '',
     update_time TIMESTAMP    DEFAULT NULL,
+    remark      VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (honor_id)
 );
 
@@ -667,6 +680,7 @@ CREATE TABLE honor_relation (
     create_time TIMESTAMP   DEFAULT NULL,
     update_by   VARCHAR(64) DEFAULT '',
     update_time TIMESTAMP   DEFAULT NULL,
+    remark      VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (relation_id)
 );
 
@@ -704,6 +718,7 @@ CREATE TABLE alert (
     create_time TIMESTAMP     DEFAULT NULL,
     update_by   VARCHAR(64)   DEFAULT '',
     update_time TIMESTAMP     DEFAULT NULL,
+    remark      VARCHAR(500)  DEFAULT NULL,
     PRIMARY KEY (alert_id)
 );
 
@@ -739,6 +754,7 @@ CREATE TABLE notification (
     create_time TIMESTAMP   DEFAULT NULL,
     update_by   VARCHAR(64) DEFAULT '',
     update_time TIMESTAMP   DEFAULT NULL,
+    remark      VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (notify_id)
 );
 
@@ -777,6 +793,7 @@ CREATE TABLE rd_labor_budget (
     create_time  TIMESTAMP     DEFAULT NULL,
     update_by    VARCHAR(64)   DEFAULT '',
     update_time  TIMESTAMP     DEFAULT NULL,
+    remark       VARCHAR(500)  DEFAULT NULL,
     PRIMARY KEY (budget_id)
 );
 
@@ -809,6 +826,7 @@ CREATE TABLE rd_researcher_salary (
     create_time    TIMESTAMP     DEFAULT NULL,
     update_by      VARCHAR(64)   DEFAULT '',
     update_time    TIMESTAMP     DEFAULT NULL,
+    remark         VARCHAR(500)  DEFAULT NULL,
     PRIMARY KEY (salary_id)
 );
 
@@ -841,6 +859,7 @@ CREATE TABLE rd_worktime_daily (
     create_time   TIMESTAMP    DEFAULT NULL,
     update_by     VARCHAR(64)  DEFAULT '',
     update_time   TIMESTAMP    DEFAULT NULL,
+    remark        VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (id)
 );
 
@@ -876,6 +895,7 @@ CREATE TABLE rd_worktime_monthly (
     create_time       TIMESTAMP     DEFAULT NULL,
     update_by         VARCHAR(64)   DEFAULT '',
     update_time       TIMESTAMP     DEFAULT NULL,
+    remark            VARCHAR(500)  DEFAULT NULL,
     PRIMARY KEY (id)
 );
 
@@ -915,6 +935,7 @@ CREATE TABLE rd_labor_allocation (
     create_time      TIMESTAMP     DEFAULT NULL,
     update_by        VARCHAR(64)   DEFAULT '',
     update_time      TIMESTAMP     DEFAULT NULL,
+    remark           VARCHAR(500)  DEFAULT NULL,
     PRIMARY KEY (alloc_id)
 );
 
@@ -957,6 +978,7 @@ CREATE TABLE surcharge_rate (
     create_time TIMESTAMP    DEFAULT NULL,
     update_by   VARCHAR(64)  DEFAULT '',
     update_time TIMESTAMP    DEFAULT NULL,
+    remark      VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (rate_id)
 );
 
@@ -975,23 +997,10 @@ COMMENT ON COLUMN surcharge_rate.update_time IS '更新时间';
 CREATE UNIQUE INDEX idx_surcharge_rate_code ON surcharge_rate (rate_code);
 
 -- ============================================================================
--- 触发器
+-- 触发器（已移除）
+-- 原 trg_expense_after_insert（经费插入自动扣减 project.budget_balance）
+-- 依阶段0任务卡决策：经费核减由 Service 层事务（@Transactional）维护，避免双重扣减
 -- ============================================================================
-
--- ----------------------------
--- 触发器：trg_expense_after_insert
--- 功能：经费记账后自动扣减课题预算余额
--- 逻辑：budget_balance = budget_balance - expense.amount
--- ----------------------------
-CREATE OR REPLACE TRIGGER trg_expense_after_insert
-AFTER INSERT ON expense
-FOR EACH ROW
-BEGIN
-    UPDATE project
-    SET budget_balance = budget_balance - :NEW.amount
-    WHERE project_id = :NEW.project_id;
-END;
-/
 
 -- ============================================================================
 -- 视图
@@ -1029,7 +1038,7 @@ LEFT JOIN sys_role r          ON ur.role_id = r.role_id
 LEFT JOIN biz_user_profile rp ON u.user_id = rp.user_id
 WHERE u.del_flag = '0';
 
-COMMENT ON TABLE v_biz_user_profile IS '科研人员扩展信息联合查询视图';
+-- 注：达梦不支持对视图执行 COMMENT ON TABLE，视图用途见上方注释
 
 -- ============================================================================
 -- 完

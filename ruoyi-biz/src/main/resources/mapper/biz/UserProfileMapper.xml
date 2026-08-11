@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.UserProfileMapper">
+
+    <resultMap type="UserProfile" id="UserProfileResult">
+        <id     property="profileId"         column="profile_id"         />
+        <result property="userId"            column="user_id"            />
+        <result property="eduLevel"          column="edu_level"          />
+        <result property="titleLevel"        column="title_level"        />
+        <result property="researchDirection" column="research_direction" />
+        <result property="researchArea"      column="research_area"      />
+        <result property="idNumber"          column="id_number"          />
+        <result property="entryDate"         column="entry_date"         />
+        <result property="officePhone"       column="office_phone"       />
+        <result property="delFlag"           column="del_flag"           />
+        <result property="createBy"          column="create_by"          />
+        <result property="createTime"        column="create_time"        />
+        <result property="updateBy"          column="update_by"          />
+        <result property="updateTime"        column="update_time"        />
+        <result property="remark"            column="remark"             />
+        <result property="nickName"          column="nick_name"          />
+        <result property="deptId"            column="dept_id"            />
+        <result property="deptName"          column="dept_name"          />
+    </resultMap>
+
+    <sql id="selectUserProfileVo">
+        select p.profile_id, p.user_id, p.edu_level, p.title_level,
+               p.research_direction, p.research_area, p.id_number,
+               p.entry_date, p.office_phone, p.del_flag,
+               p.create_by, p.create_time, p.update_by, p.update_time, p.remark,
+               u.nick_name, u.dept_id, d.dept_name
+        from biz_user_profile p
+        left join sys_user u on p.user_id = u.user_id
+        left join sys_dept d on u.dept_id = d.dept_id
+    </sql>
+
+    <select id="selectUserProfileViewList" parameterType="UserProfile" resultMap="UserProfileResult">
+        <include refid="selectUserProfileVo"/>
+        <where>
+            <!-- 自定义 XML 不走 @TableLogic 自动过滤，显式声明 -->
+            and p.del_flag = '0'
+            <if test="userId != null"> and p.user_id = #{userId} </if>
+            <if test="nickName != null and nickName != ''"> and u.nick_name like concat('%', #{nickName}, '%') </if>
+            <if test="eduLevel != null and eduLevel != ''"> and p.edu_level = #{eduLevel} </if>
+            <if test="titleLevel != null and titleLevel != ''"> and p.title_level = #{titleLevel} </if>
+            <if test="researchDirection != null and researchDirection != ''"> and p.research_direction like concat('%', #{researchDirection}, '%') </if>
+            <if test="deptId != null"> and u.dept_id = #{deptId} </if>
+            <if test="params.beginCreateTime != null and params.beginCreateTime != ''">
+                and date_format(p.create_time, '%Y-%m-%d') <![CDATA[ >= ]]> date_format(#{params.beginCreateTime}, '%Y-%m-%d')
+            </if>
+            <if test="params.endCreateTime != null and params.endCreateTime != ''">
+                and date_format(p.create_time, '%Y-%m-%d') <![CDATA[ <= ]]> date_format(#{params.endCreateTime}, '%Y-%m-%d')
+            </if>
+            <!-- 数据范围过滤 -->
+            ${params.dataScope}
+        </where>
+        order by p.profile_id desc
+    </select>
+
+    <select id="selectUserProfileViewById" parameterType="Long" resultMap="UserProfileResult">
+        <include refid="selectUserProfileVo"/>
+        where p.del_flag = '0' and p.profile_id = #{profileId}
+    </select>
+
+</mapper>
