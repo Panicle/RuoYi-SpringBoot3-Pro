@@ -14,6 +14,7 @@
 | 3 | V1.0.2__menu_permissions.sql | devdm | Claude Code | 2026-08-11 | ✅ 8个菜单（2000-2007），挂载 admin |
 | 4 | V1.0.3__views.sql | devdm | Claude Code | 2026-08-11 | ✅ 视图重建（幂等） |
 | 5 | V1.0.4__roles.sql | devdm | Claude Code | 2026-08-11 | ✅ 6业务角色（100-105）+ 29条角色菜单挂载 |
+| 6 | V1.0.5__profile_into_user.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-11 | ✅ 53/53语句成功（首次+幂等复查各一次）：表结构3列变更+3字典（23项）+ 菜单迁移+ 视图重建 |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）

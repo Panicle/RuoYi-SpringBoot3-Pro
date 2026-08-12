@@ -9,7 +9,9 @@
         <result property="titleLevel"        column="title_level"        />
         <result property="researchDirection" column="research_direction" />
         <result property="researchArea"      column="research_area"      />
-        <result property="idNumber"          column="id_number"          />
+        <result property="degree"            column="degree"             />
+        <result property="major"             column="major"              />
+        <result property="bio"               column="bio"                />
         <result property="entryDate"         column="entry_date"         />
         <result property="officePhone"       column="office_phone"       />
         <result property="delFlag"           column="del_flag"           />
@@ -25,7 +27,8 @@
 
     <sql id="selectUserProfileVo">
         select p.profile_id, p.user_id, p.edu_level, p.title_level,
-               p.research_direction, p.research_area, p.id_number,
+               p.research_direction, p.research_area,
+               p.degree, p.major, p.bio,
                p.entry_date, p.office_phone, p.del_flag,
                p.create_by, p.create_time, p.update_by, p.update_time, p.remark,
                u.nick_name, u.dept_id, d.dept_name
