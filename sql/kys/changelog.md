@@ -15,6 +15,7 @@
 | 4 | V1.0.3__views.sql | devdm | Claude Code | 2026-08-11 | ✅ 视图重建（幂等） |
 | 5 | V1.0.4__roles.sql | devdm | Claude Code | 2026-08-11 | ✅ 6业务角色（100-105）+ 29条角色菜单挂载 |
 | 6 | V1.0.5__profile_into_user.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-11 | ✅ 53/53语句成功（首次+幂等复查各一次）：表结构3列变更+3字典（23项）+ 菜单迁移+ 视图重建 |
+| 7 | V1.0.6__project_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-12 | ✅ 64/64语句成功（首次+幂等复查各一次）：表结构2列+唯一索引+字典1类型6项+菜单10项+角色菜单挂载39条；DB复查（project 17列/唯一索引/dict_id=221/菜单2010-2019/7角色挂载）全部 PASS |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
@@ -130,3 +131,65 @@
 | 2 | `V1.0.1__dict_data.sql` | 业务字典数据初始化 |
 | 3 | `V1.0.2__menu_permissions.sql` | 科研管理菜单与按钮权限 |
 | 4 | `V1.0.3__views.sql` | 业务视图（v_biz_user_profile 等） |
+| 5 | `V1.0.4__roles.sql` | 6 业务角色（100-105）+ sys_role_menu 挂载 |
+| 6 | `V1.0.5__profile_into_user.sql` | 科研档案并入用户管理（删 id_number + 补 degree/major/bio + 3 字典） |
+| 7 | `V1.0.6__project_module.sql` | 阶段2课题管理基线：project 加 2 列 + 唯一索引 + project_type 字典 6 项 + 菜单 2010-2019 + 6 业务角色差异化挂载 |
+
+---
+
+## V1.0.6 — 阶段2 课题管理基线
+
+**日期**：2026-08-12
+
+**任务卡关联**：阶段2 课题管理 / Task 1：V1.0.6 + 后端 9 文件 + 编译（后端基线）
+
+**变更内容**：
+
+1. **project 表新增 2 列**（V1.0.0 15 列 → V1.0.6 17 列）
+   - `project_no VARCHAR(50)`：课题编号，格式 `KY-{yyyy}-{3位流水}`，唯一索引 `idx_project_no_uk` 兜底，INSERT 时由 Service 生成（`SELECT MAX` + 重试 1 次）
+   - `project_type VARCHAR(20)`：课题级别，字典 `project_type`，值大写
+
+2. **新增字典 `project_type`**（dict_id=221，dict_code 20091–20096，6 项）
+   - `NATIONAL` 国家级（danger）
+   - `PROVINCIAL` 省部级（warning）
+   - `CR_GROUP` 国铁集团级（primary，区别于 honor_level=GROUP）
+   - `COMPANY` 集团公司级（success）
+   - `INSTITUTE` 所级（info）
+   - `LATERAL` 横向委托（default）
+
+3. **新增菜单 10 项**（sys_menu 2010–2019）
+   - 2010 M 科研管理（顶级目录，icon=form，path=biz）
+   - 2011 C 课题管理（path=project, component=biz/project/index, perms=biz:project:list）
+   - 2012–2019 F 8 个按钮：query / add / edit / remove / export / archive / member / detail
+
+4. **角色挂载（按 §3.7.4 矩阵）**
+   - admin(1) / science_admin(101)：全部 10 项
+   - leader(100) / office(102)：只读 3 项（2010, 2011, 2012）
+   - labor_hr(103)：4 项（2010, 2011, 2012, 2018，成员审核）
+   - dept_leader(104)：8 项（2010, 2011, 2012, 2013, 2014, 2016, 2018, 2019，本部门，无 remove/archive）
+   - researcher(105)：4 项（2010, 2011, 2012, 2019，仅本人相关，不挂写权限）
+
+**幂等性设计**：
+- 列添加走 `ALTER TABLE ADD IF NOT EXISTS`（达梦支持）
+- 唯一索引通过 PL 匿名块预检 `USER_INDEXES` 后再 `CREATE UNIQUE INDEX`（达梦 `CREATE INDEX` 无 `IF NOT EXISTS`）
+- 字典 / 菜单 / 角色菜单挂载走 `INSERT ... SELECT ... WHERE NOT EXISTS`
+- **首次执行 64/64 成功；二次重跑 64/64 全绿零副作用**
+
+**DB 复查**（`python .tmp/check_v106_after.py`，全部 PASS）：
+- project 表现有 17 列，含 `PROJECT_NO` / `PROJECT_TYPE`
+- `IDX_PROJECT_NO_UK` 存在且 UNIQUE
+- `sys_dict_type` dict_id=221=dict_name='课题级别'/dict_type='project_type'
+- `sys_dict_data` dict_code 20091–20096，dict_value 顺序与任务卡一致，list_class 与字典样式标签对应
+- `sys_menu` 2010–2019 共 10 项，菜单类型 / 父菜单 / 路径 / 组件 / 权限标识全部对齐任务卡 §3.7.3
+- `sys_role_menu` 7 个角色（admin + 6 业务角色）挂载数与 §3.7.4 矩阵完全一致
+
+**依赖**：
+- V1.0.0：`project` / `project_member` 表（15 列 + 8 列）
+- V1.0.1：`project_status` / `member_role` 字典
+- V1.0.4：6 业务角色（100–105）
+- V1.0.5：`sys_user` 含 dept_id（详情/列表 JOIN 基础）
+
+**后续任务**：
+- 阶段2 Task 1：后端 9 文件实现（Project Domain / ProjectMember Domain / ProjectMapper / ProjectMemberMapper / 对应 XML / IProjectService / ProjectServiceImpl / ProjectController）+ `mvn clean compile -DskipTests` 通过
+- 阶段2 Task 2：前端 3 文件（api/biz/project.js + views/biz/project/index.vue + views/biz/project/detail.vue）
+- 阶段2 Task 3：冒烟测试（状态机非法迁移 / 唯一 HOST 约束 / 换主持人事务 / researcher 数据权限）
