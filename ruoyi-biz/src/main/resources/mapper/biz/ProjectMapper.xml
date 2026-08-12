@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.ProjectMapper">
+
+    <resultMap type="Project" id="ProjectResult">
+        <id     property="projectId"      column="project_id"      />
+        <result property="projectNo"     column="project_no"      />
+        <result property="projectType"   column="project_type"    />
+        <result property="projectName"   column="project_name"    />
+        <result property="leaderId"      column="leader_id"       />
+        <result property="budgetTotal"   column="budget_total"    />
+        <result property="budgetBalance" column="budget_balance"  />
+        <result property="status"        column="status"          />
+        <result property="startDate"     column="start_date"      />
+        <result property="endDate"       column="end_date"        />
+        <result property="deptId"        column="dept_id"         />
+        <result property="delFlag"       column="del_flag"        />
+        <result property="createBy"      column="create_by"       />
+        <result property="createTime"    column="create_time"     />
+        <result property="updateBy"      column="update_by"       />
+        <result property="updateTime"    column="update_time"     />
+        <result property="remark"        column="remark"          />
+        <result property="leaderName"    column="leader_name"     />
+        <result property="deptName"      column="dept_name"       />
+    </resultMap>
+
+    <sql id="selectProjectVo">
+        select p.project_id, p.project_no, p.project_type, p.project_name, p.leader_id,
+               p.budget_total, p.budget_balance, p.status,
+               p.start_date, p.end_date, p.dept_id, p.del_flag,
+               p.create_by, p.create_time, p.update_by, p.update_time, p.remark,
+               u.nick_name as leader_name,
+               d.dept_name
+        from project p
+        left join sys_user  u on p.leader_id = u.user_id
+        left join sys_dept  d on p.dept_id   = d.dept_id
+    </sql>
+
+    <!-- 列表：走 @DataScope 通道，researcher 不调用此方法 -->
+    <select id="selectProjectList" parameterType="Project" resultMap="ProjectResult">
+        <include refid="selectProjectVo"/>
+        <where>
+            p.del_flag = '0'
+            <if test="projectId != null"> and p.project_id = #{projectId} </if>
+            <if test="projectNo != null and projectNo != ''"> and p.project_no = #{projectNo} </if>
+            <if test="projectName != null and projectName != ''"> and p.project_name like concat(concat('%', #{projectName}), '%') </if>
+            <if test="projectType != null and projectType != ''"> and p.project_type = #{projectType} </if>
+            <if test="status != null and status != ''"> and p.status = #{status} </if>
+            <if test="leaderId != null"> and p.leader_id = #{leaderId} </if>
+            <if test="deptId != null"> and p.dept_id = #{deptId} </if>
+            <if test="params.beginStartDate != null and params.beginStartDate != ''">
+                and to_char(p.start_date, 'yyyy-MM-dd') <![CDATA[ >= ]]> #{params.beginStartDate}
+            </if>
+            <if test="params.endStartDate != null and params.endStartDate != ''">
+                and to_char(p.start_date, 'yyyy-MM-dd') <![CDATA[ <= ]]> #{params.endStartDate}
+            </if>
+            <!-- 数据范围过滤 -->
+            ${params.dataScope}
+        </where>
+        order by p.project_id desc
+    </select>
+
+    <!-- 按 ID 查主表（不带数据范围，Service 内部使用） -->
+    <select id="selectProjectById" parameterType="Long" resultMap="ProjectResult">
+        <include refid="selectProjectVo"/>
+        where p.del_flag = '0' and p.project_id = #{projectId}
+    </select>
+
+    <!-- 详情查询：走 @DataScope；researcher(data_scope=5) 由 Service 切换到"本人相关"专用方法 -->
+    <select id="selectProjectScopedById" resultMap="ProjectResult">
+        <include refid="selectProjectVo"/>
+        where p.del_flag = '0' and p.project_id = #{projectId}
+        <!-- 数据范围过滤 -->
+        ${params.dataScope}
+    </select>
+
+    <!-- 更新状态（changeStatus / archive 调用） -->
+    <update id="updateStatus">
+        update project
+        set status     = #{status},
+            update_by  = #{updateBy},
+            update_time = sysdate
+        where project_id = #{projectId}
+          and del_flag   = '0'
+    </update>
+
+    <!-- 更新主持人（changeHost 事务最后一步） -->
+    <update id="updateLeader">
+        update project
+        set leader_id   = #{newLeaderId},
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where project_id = #{projectId}
+          and del_flag   = '0'
+    </update>
+
+    <!-- 更新预算总额 -->
+    <update id="updateBudget">
+        update project
+        set budget_total = #{budgetTotal}
+        where project_id = #{projectId}
+          and del_flag   = '0'
+    </update>
+
+    <!-- 取指定年份最大流水号；返回 Long，无则 null -->
+    <select id="selectMaxSeqByYear" resultType="java.lang.Long">
+        select max(to_number(substr(project_no, 9)))
+          from project
+         where project_no like concat('KY-', #{year}, '-%')
+    </select>
+
+    <!-- researcher 列表（本人相关）：leader_id = currentUserId OR 成员表中存在 currentUserId -->
+    <select id="selectProjectListForResearcher" parameterType="Project" resultMap="ProjectResult">
+        <include refid="selectProjectVo"/>
+        <where>
+            p.del_flag = '0'
+            <if test="projectId != null"> and p.project_id = #{projectId} </if>
+            <if test="projectNo != null and projectNo != ''"> and p.project_no = #{projectNo} </if>
+            <if test="projectName != null and projectName != ''"> and p.project_name like concat(concat('%', #{projectName}), '%') </if>
+            <if test="projectType != null and projectType != ''"> and p.project_type = #{projectType} </if>
+            <if test="status != null and status != ''"> and p.status = #{status} </if>
+            <if test="leaderId != null"> and p.leader_id = #{leaderId} </if>
+            <if test="deptId != null"> and p.dept_id = #{deptId} </if>
+            <if test="params.beginStartDate != null and params.beginStartDate != ''">
+                and to_char(p.start_date, 'yyyy-MM-dd') <![CDATA[ >= ]]> #{params.beginStartDate}
+            </if>
+            <if test="params.endStartDate != null and params.endStartDate != ''">
+                and to_char(p.start_date, 'yyyy-MM-dd') <![CDATA[ <= ]]> #{params.endStartDate}
+            </if>
+            and (
+                p.leader_id = #{params.selfUserId}
+                or exists (
+                    select 1 from project_member m
+                     where m.project_id = p.project_id
+                       and m.user_id    = #{params.selfUserId}
+                       and m.del_flag   = '0'
+                )
+            )
+        </where>
+        order by p.project_id desc
+    </select>
+
+    <!-- researcher 详情（本人相关）：同上 EXISTS -->
+    <select id="selectProjectScopedByIdForResearcher" resultMap="ProjectResult">
+        <include refid="selectProjectVo"/>
+        where p.del_flag = '0' and p.project_id = #{projectId}
+          and (
+              p.leader_id = #{currentUserId}
+              or exists (
+                  select 1 from project_member m
+                   where m.project_id = p.project_id
+                     and m.user_id    = #{currentUserId}
+                     and m.del_flag   = '0'
+              )
+          )
+    </select>
+</mapper>

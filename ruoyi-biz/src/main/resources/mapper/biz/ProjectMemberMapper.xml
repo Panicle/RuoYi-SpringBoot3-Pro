@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.ProjectMemberMapper">
+
+    <resultMap type="ProjectMember" id="MemberResult">
+        <id     property="memberId"   column="member_id"   />
+        <result property="projectId"  column="project_id"  />
+        <result property="userId"     column="user_id"     />
+        <result property="role"       column="role"        />
+        <result property="delFlag"    column="del_flag"    />
+        <result property="createBy"   column="create_by"   />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy"   column="update_by"   />
+        <result property="updateTime" column="update_time" />
+        <result property="remark"     column="remark"      />
+    </resultMap>
+
+    <!-- 成员关联视图字段（JOIN sys_user / sys_dept） -->
+    <resultMap type="ProjectMember" id="MemberJoinUserResult" extends="MemberResult">
+        <result property="userName"   column="user_name"   />
+        <result property="nickName"   column="nick_name"   />
+        <result property="deptName"   column="dept_name"   />
+    </resultMap>
+
+    <sql id="selectMemberVo">
+        select m.member_id, m.project_id, m.user_id, m.role, m.del_flag,
+               m.create_by, m.create_time, m.update_by, m.update_time, m.remark,
+               u.user_name, u.nick_name, d.dept_name
+        from project_member m
+        left join sys_user u on m.user_id = u.user_id
+        left join sys_dept d on u.dept_id = d.dept_id
+    </sql>
+
+    <!-- 成员列表：走 @DataScope，HOST 排第一再按 user_id -->
+    <select id="selectMemberList" parameterType="ProjectMember" resultMap="MemberJoinUserResult">
+        <include refid="selectMemberVo"/>
+        <where>
+            m.del_flag = '0'
+            <if test="projectId != null"> and m.project_id = #{projectId} </if>
+            <if test="userId != null"> and m.user_id = #{userId} </if>
+            <if test="role != null and role != ''"> and m.role = #{role} </if>
+            <!-- 数据范围过滤 -->
+            ${params.dataScope}
+        </where>
+        order by case when m.role = 'HOST' then 0 else 1 end, m.user_id
+    </select>
+
+    <!-- 当前有效 HOST（单个） -->
+    <select id="selectHostMember" resultMap="MemberResult">
+        select member_id, project_id, user_id, role, del_flag,
+               create_by, create_time, update_by, update_time, remark
+        from project_member
+        where project_id = #{projectId} and role = 'HOST' and del_flag = '0'
+    </select>
+
+    <!-- 当前有效成员行（不限 role） -->
+    <select id="selectMemberByUser" resultMap="MemberResult">
+        select member_id, project_id, user_id, role, del_flag,
+               create_by, create_time, update_by, update_time, remark
+        from project_member
+        where project_id = #{projectId} and user_id = #{userId} and del_flag = '0'
+    </select>
+
+    <!-- 更新角色（HOST → PARTICIPANT / PARTICIPANT → HOST） -->
+    <update id="updateRole">
+        update project_member
+        set role        = #{role},
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where member_id = #{memberId}
+          and del_flag  = '0'
+    </update>
+
+    <!-- 批量逻辑删除 -->
+    <update id="softDeleteByIds">
+        update project_member
+        set del_flag    = '2',
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where member_id in
+        <foreach collection="memberIds" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+          and del_flag = '0'
+    </update>
+
+    <!-- 通过 member_id 反查所属 project_id（删除前用于数据权限校验） -->
+    <select id="selectProjectIdByMemberId" resultType="java.lang.Long">
+        select project_id from project_member where member_id = #{memberId} and del_flag = '0'
+    </select>
+</mapper>
