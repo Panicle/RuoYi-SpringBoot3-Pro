@@ -306,6 +306,7 @@ public class ProjectServiceImpl implements IProjectService {
     // ========================================================
 
     @Override
+    @Transactional(readOnly = true)
     public List<ProjectMember> selectMemberList(Long projectId) {
         if (projectId == null) {
             throw new ServiceException("projectId 不能为空");
@@ -405,28 +406,17 @@ public class ProjectServiceImpl implements IProjectService {
                 throw new ServiceException("已归档课题不可删除成员");
             }
         }
-        // 拒绝删除唯一 HOST：遍历 memberIds 检查，若其中 HOST 删后导致无 HOST，报错
-        ProjectMember currentHost = null;
-        Long currentHostProjectId = null;
+        // 拒绝删除唯一 HOST：遍历 memberIds 涉及的每个 project，各自校验 HOST 是否落入待删列表
+        // 不能 break：第一批跨多课题删除时，跳过第二课题的 HOST 校验会漏过
         for (Long pid : projectIds) {
             ProjectMember h = projectMemberMapper.selectHostMember(pid);
-            if (h != null) {
-                currentHost = h;
-                currentHostProjectId = pid;
-                break;
+            if (h == null) {
+                continue;  // 该课题无 HOST（理论上不会出现，仅防御）
             }
-        }
-        if (currentHost != null) {
-            // 检查 currentHost.memberId 是否在待删列表内
-            boolean hostInDeleteList = false;
             for (Long mid : memberIds) {
-                if (mid.equals(currentHost.getMemberId())) {
-                    hostInDeleteList = true;
-                    break;
+                if (mid.equals(h.getMemberId())) {
+                    throw new ServiceException("不能删除课题[" + pid + "]的唯一 HOST，请先换主持人");
                 }
-            }
-            if (hostInDeleteList) {
-                throw new ServiceException("不能删除课题[" + currentHostProjectId + "]的唯一 HOST，请先换主持人");
             }
         }
         return projectMemberMapper.softDeleteByIds(memberIds, operName);

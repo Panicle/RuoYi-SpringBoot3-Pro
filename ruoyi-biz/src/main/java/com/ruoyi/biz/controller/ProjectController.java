@@ -22,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -150,14 +149,12 @@ public class ProjectController extends BaseController {
     // ========================================================
 
     /**
-     * 查询课题成员列表
+     * 查询课题成员列表（§5.10：query 形式 ?projectId=1001&pageNum=1&pageSize=10；GET 禁止 body）
      */
     @PreAuthorize("@ss.hasPermi('biz:project:member')")
     @GetMapping("/member/list")
-    public TableDataInfo memberList(@RequestBody(required = false) ProjectMember query) {
-        // 成员端点统一通过 projectId 过滤；可同时支持按 userId 等筛选
+    public TableDataInfo memberList(Long projectId) {
         startPage();
-        Long projectId = query == null ? null : query.getProjectId();
         List<ProjectMember> list = projectService.selectMemberList(projectId);
         return getDataTable(list);
     }
@@ -220,19 +217,4 @@ public class ProjectController extends BaseController {
         Long newLeaderUserId = (newObj instanceof Number) ? ((Number) newObj).longValue() : Long.parseLong(newObj.toString());
         return toAjax(projectService.changeHost(projectId, newLeaderUserId, getUsername()));
     }
-
-    /**
-     * 把 member/list 端点的 projectId 改为 query 参数形式（更贴近若依习惯）。
-     * 保留 member/list 的 @RequestBody 形式作为 fallback；上面已实现 GET /member/list?projectId=1001。
-     */
-    @GetMapping("/member/listByProject")
-    public TableDataInfo memberListByProject(Long projectId) {
-        startPage();
-        List<ProjectMember> list = projectService.selectMemberList(projectId);
-        return getDataTable(list);
-    }
-
-    // 删除路径工具方法（避免 Some IDE 警告 unused import）
-    @SuppressWarnings("unused")
-    private static void touchImports() { Arrays.asList(1, 2, 3).size(); }
 }
