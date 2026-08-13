@@ -95,10 +95,8 @@ public class CooperativeUnitServiceImpl implements ICooperativeUnitService {
             if (StringUtils.isEmpty(unit.getExternalUnitType())) {
                 throw new ServiceException("顶级单位必须选择单位类别");
             }
-            if (StringUtils.isEmpty(unit.getUnitType())) {
-                // V1.0.0 表默认 EXTERNAL
-                unit.setUnitType("EXTERNAL");
-            }
+            // 合作单位模块全部是集团外单位，强制 EXTERNAL，忽略 body 传值
+            unit.setUnitType("EXTERNAL");
         } else {
             CooperativeUnit parent = cooperativeUnitMapper.selectUnitById(parentId);
             if (parent == null) {
@@ -151,6 +149,8 @@ public class CooperativeUnitServiceImpl implements ICooperativeUnitService {
             String oldAncestors = oldUnit.getAncestors();
             // ancestors 无条件重算（防止父级未变时 body 直写绕过）
             unit.setAncestors("");
+            // 顶级单位强制 EXTERNAL，防止 body 直写改类型
+            unit.setUnitType("EXTERNAL");
             if (!StringUtils.equals(newAncestors, oldAncestors)) {
                 updateUnitChildren(unit.getUnitId(), newAncestors, oldAncestors);
             }

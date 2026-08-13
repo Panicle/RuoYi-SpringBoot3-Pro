@@ -550,6 +550,50 @@ public class ProjectServiceImpl implements IProjectService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public int addProjectUnits(Long projectId, List<Long> unitIds, String cooperationType, String operName) {
+        if (projectId == null || unitIds == null || unitIds.isEmpty()) {
+            throw new ServiceException("请选择合作单位");
+        }
+        // 数据权限校验（闸门一次，与单条端点 addProjectUnit 一致）
+        selectProjectById(projectId);
+        Project p = projectMapper.selectProjectById(projectId);
+        if (p == null) {
+            throw new ServiceException("课题不存在");
+        }
+        if (STATUS_ARCHIVED.equals(p.getStatus())) {
+            throw new ServiceException("已归档课题不可新增关联单位");
+        }
+        // cooperationType 为空默认 PARTICIPANT（与单条端点一致）
+        String cType = StringUtils.isEmpty(cooperationType) ? ROLE_PARTICIPANT : cooperationType;
+        int inserted = 0;
+        for (Long unitId : unitIds) {
+            if (unitId == null) {
+                throw new ServiceException("unitId 不能为空");
+            }
+            // 单位存在性校验（有效行）；任一不存在则整体回滚
+            CooperativeUnit unit = cooperativeUnitMapper.selectUnitById(unitId);
+            if (unit == null || !"0".equals(unit.getDelFlag())) {
+                throw new ServiceException("单位[" + unitId + "]不存在或已删除");
+            }
+            // 已关联跳过不报错
+            ProjectUnit existing = projectUnitMapper.selectByProjectAndUnit(projectId, unitId);
+            if (existing != null) {
+                continue;
+            }
+            ProjectUnit pu = new ProjectUnit();
+            pu.setProjectId(projectId);
+            pu.setUnitId(unitId);
+            pu.setCooperationType(cType);
+            pu.setDelFlag("0");
+            pu.setCreateBy(operName);
+            projectUnitMapper.insert(pu);
+            inserted++;
+        }
+        return inserted;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public int removeProjectUnits(Long[] ids, String operName) {
         if (ids == null || ids.length == 0) {
             return 0;

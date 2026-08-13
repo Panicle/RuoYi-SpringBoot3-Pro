@@ -85,6 +85,13 @@ public interface IProjectService {
     int addProjectUnit(ProjectUnit projectUnit, String operName);
 
     /**
+     * 批量新增课题关联单位（先过 scoped selectProjectById 闸门；已关联跳过不报错；任一单位不存在整体回滚）
+     *
+     * @return 实际新增数量
+     */
+    int addProjectUnits(Long projectId, List<Long> unitIds, String cooperationType, String operName);
+
+    /**
      * 批量删除课题关联单位（每个关联所属课题需通过数据范围；逻辑删除）
      */
     int removeProjectUnits(Long[] ids, String operName);

@@ -245,6 +245,35 @@ public class ProjectController extends BaseController {
     }
 
     /**
+     * 批量新增课题关联单位（body: { projectId, unitIds:[...], cooperationType }；已关联跳过不报错，任一不存在则整体回滚）
+     */
+    @PreAuthorize("@ss.hasPermi('biz:project:unit')")
+    @Log(title = "课题关联单位", businessType = BusinessType.INSERT)
+    @PostMapping("/unit/batch")
+    @RepeatSubmit(interval = 2000)
+    public AjaxResult addUnitBatch(@RequestBody Map<String, Object> body) {
+        Object pidObj = body.get("projectId");
+        Object unitsObj = body.get("unitIds");
+        Object ctypeObj = body.get("cooperationType");
+        if (pidObj == null || !(unitsObj instanceof List)) {
+            return error("参数不完整");
+        }
+        Long projectId = (pidObj instanceof Number) ? ((Number) pidObj).longValue() : Long.parseLong(pidObj.toString());
+        @SuppressWarnings("unchecked")
+        List<Object> rawList = (List<Object>) unitsObj;
+        List<Long> unitIds = new java.util.ArrayList<>();
+        for (Object o : rawList) {
+            if (o == null) continue;
+            unitIds.add((o instanceof Number) ? ((Number) o).longValue() : Long.parseLong(o.toString()));
+        }
+        String cooperationType = ctypeObj == null ? null : ctypeObj.toString();
+        int inserted = projectService.addProjectUnits(projectId, unitIds, cooperationType, getUsername());
+        int skip = unitIds.size() - inserted;
+        String msg = "成功关联" + inserted + "个" + (skip > 0 ? "，跳过已关联" + skip + "个" : "");
+        return success(msg);
+    }
+
+    /**
      * 批量删除课题关联单位
      */
     @PreAuthorize("@ss.hasPermi('biz:project:unit')")
