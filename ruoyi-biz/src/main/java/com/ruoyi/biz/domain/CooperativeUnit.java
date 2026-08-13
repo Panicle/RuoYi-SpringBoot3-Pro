@@ -39,8 +39,7 @@ public class CooperativeUnit extends BaseEntity {
     @TableField("unit_name")
     private String unitName;
 
-    /** 单位类型（字典 unit_type：INTERNAL/EXTERNAL；子单位继承父级，不可自行修改） */
-    @Excel(name = "单位类型", dictType = "unit_type")
+    /** 单位类型（字典 unit_type：INTERNAL/EXTERNAL；本模块强制 EXTERNAL，不再导出该列） */
     @TableField("unit_type")
     private String unitType;
 
