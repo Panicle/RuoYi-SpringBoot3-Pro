@@ -4,9 +4,11 @@
 
     <resultMap type="Project" id="ProjectResult">
         <id     property="projectId"      column="project_id"      />
-        <result property="projectNo"     column="project_no"      />
-        <result property="projectType"   column="project_type"    />
-        <result property="projectName"   column="project_name"    />
+        <result property="projectNo"      column="project_no"       />
+        <result property="projectType"    column="project_type"     />
+        <result property="projectCategory" column="project_category" />
+        <result property="specialty"      column="specialty"        />
+        <result property="projectName"    column="project_name"     />
         <result property="leaderId"      column="leader_id"       />
         <result property="budgetTotal"   column="budget_total"    />
         <result property="budgetBalance" column="budget_balance"  />
@@ -25,7 +27,8 @@
     </resultMap>
 
     <sql id="selectProjectVo">
-        select p.project_id, p.project_no, p.project_type, p.project_name, p.leader_id,
+        select p.project_id, p.project_no, p.project_type, p.project_category, p.specialty,
+               p.project_name, p.leader_id,
                p.budget_total, p.budget_balance, p.status,
                p.start_date, p.end_date, p.dept_id, p.del_flag,
                p.create_by, p.create_time, p.update_by, p.update_time, p.remark,

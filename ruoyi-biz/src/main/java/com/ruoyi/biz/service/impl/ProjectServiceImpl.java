@@ -138,6 +138,12 @@ public class ProjectServiceImpl implements IProjectService {
         if (StringUtils.isEmpty(project.getProjectType())) {
             throw new ServiceException("课题级别不能为空");
         }
+        if (StringUtils.isEmpty(project.getProjectCategory())) {
+            throw new ServiceException("项目类别不能为空");
+        }
+        if (StringUtils.isEmpty(project.getSpecialty())) {
+            throw new ServiceException("专业分类不能为空");
+        }
         if (project.getLeaderId() == null) {
             throw new ServiceException("主持人不能为空");
         }
@@ -231,7 +237,7 @@ public class ProjectServiceImpl implements IProjectService {
     }
 
     // ========================================================
-    //  删除（逻辑删除；有有效成员时拒）
+    //  删除（逻辑删除；级联逻辑删全部成员，含组长）
     // ========================================================
 
     @Override
@@ -248,13 +254,8 @@ public class ProjectServiceImpl implements IProjectService {
             if (STATUS_ARCHIVED.equals(p.getStatus())) {
                 throw new ServiceException("已归档课题不可删除");
             }
-            // 校验有效成员是否存在
-            ProjectMember q = new ProjectMember();
-            q.setProjectId(pid);
-            List<ProjectMember> members = projectMemberMapper.selectMemberList(q);
-            if (!members.isEmpty()) {
-                throw new ServiceException("课题[" + p.getProjectName() + "]仍有有效成员，请先清空成员或迁移后再删");
-            }
+            // 级联逻辑删除全部有效成员（含组长），与课题删除同事务
+            projectMemberMapper.softDeleteByProjectId(pid, operName);
         }
         // BaseMapper.deleteByIds 走 @TableLogic 自动改写 del_flag='2'
         return projectMapper.deleteByIds(Arrays.asList(projectIds));

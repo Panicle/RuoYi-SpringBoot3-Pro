@@ -82,6 +82,16 @@
           and del_flag = '0'
     </update>
 
+    <!-- 按课题逻辑删除全部有效成员（删除课题级联，含组长） -->
+    <update id="softDeleteByProjectId">
+        update project_member
+        set del_flag    = '2',
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where project_id = #{projectId}
+          and del_flag = '0'
+    </update>
+
     <!-- 通过 member_id 反查所属 project_id（删除前用于数据权限校验） -->
     <select id="selectProjectIdByMemberId" resultType="java.lang.Long">
         select project_id from project_member where member_id = #{memberId} and del_flag = '0'
