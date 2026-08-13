@@ -17,6 +17,7 @@
 | 6 | V1.0.5__profile_into_user.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-11 | ✅ 53/53语句成功（首次+幂等复查各一次）：表结构3列变更+3字典（23项）+ 菜单迁移+ 视图重建 |
 | 7 | V1.0.6__project_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-12 | ✅ 64/64语句成功（首次+幂等复查各一次）：表结构2列+唯一索引+字典1类型6项+菜单10项+角色菜单挂载39条；DB复查（project 17列/唯一索引/dict_id=221/菜单2010-2019/7角色挂载）全部 PASS |
 | 8 | V1.0.7__budget_breakdown.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 12/12语句成功（首次+幂等复查各一次）：字典 budget_category（dict_id=222 + dict_data 20097-20106 共10项）+ budget_split.category 注释更新；DB复查（dict_type=222/dict_data 10项顺序与值/注释）全部 PASS |
+| 9 | V1.0.8__project_category_specialty.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 19/19语句成功（首次+幂等复查各一次）：字典 project_category（dict_id=223 + dict_data 20107-20109 共3项）+ specialty（dict_id=224 + dict_data 20110-20118 共9项）+ project 加列 project_category/specialty（VARCHAR(20) 可空）+ member_role HOST 标签 主持人→组长；DB复查（两字典/两列/注释/HOST label）全部 PASS |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
@@ -136,6 +137,7 @@
 | 6 | `V1.0.5__profile_into_user.sql` | 科研档案并入用户管理（删 id_number + 补 degree/major/bio + 3 字典） |
 | 7 | `V1.0.6__project_module.sql` | 阶段2课题管理基线：project 加 2 列 + 唯一索引 + project_type 字典 6 项 + 菜单 2010-2019 + 6 业务角色差异化挂载 |
 | 8 | `V1.0.7__budget_breakdown.sql` | 阶段2变更1预算细分基线：预算科目字典 budget_category（dict_id=222，dict_data 20097-20106 共10项）+ budget_split.category 注释更新 |
+| 9 | `V1.0.8__project_category_specialty.sql` | 阶段2变更2项目类别/专业分类基线：字典 project_category（dict_id=223，20107-20109 共3项）+ specialty（dict_id=224，20110-20118 共9项）+ project 加列 project_category/specialty + member_role HOST 改组长 |
 
 ---
 
@@ -242,3 +244,50 @@
 - 阶段2变更1 Task 3：前端（编号输入 + 预算细分分组表单 + 详情展示）
 - 阶段2变更1 Task 4：冒烟（编号人工/唯一、预算Σ、回归）+ 数据权限抽查
 - 挂账：监管上限校验（间接费/委外费比例）不在本变更范围
+
+---
+
+## V1.0.8 — 阶段2变更2 项目类别/专业分类基线
+
+**日期**：2026-08-13
+
+**任务卡关联**：阶段2 课题管理·变更2 / Task 1：V1.0.8 SQL（项目类别/专业分类字典）+ devdm 执行 + changelog
+
+**变更内容**：
+
+1. **新增字典 `project_category`**（dict_id=223，dict_name='项目类别'，dict_type='project_category'，status='0'）
+   - dict_data 20107–20109 共 3 项（dict_sort 1-3，dict_value 大写），对应课题经费来源：
+     - `A` 全额资助课题（primary）
+     - `B` 定额补助课题（warning）
+     - `C` 经费全部自筹课题（default）
+
+2. **新增字典 `specialty`**（dict_id=224，dict_name='专业分类'，dict_type='specialty'，status='0'）
+   - dict_data 20110–20118 共 9 项（dict_sort 1-9，dict_value 大写），对应铁路专业：
+     - `Y` 运输 / `J` 机务 / `GD` 供电 / `C` 车辆 / `G` 工务工程 / `D` 电务 / `X` 信息技术 / `Z` 综合 / `F` 软科学
+
+3. **project 表新增 2 列**（V1.0.6 17 列 → V1.0.8 19 列，均可空——存量数据无值，必填约束在应用层）
+   - `project_category VARCHAR(20)`：项目类别（字典 project_category）
+   - `specialty VARCHAR(20)`：专业分类（字典 specialty）
+
+4. **member_role HOST 标签 主持人→组长**（dict_value=HOST，仅标签改；dict 值 HOST/PARTICIPANT 不变）
+
+**幂等性设计**：
+- 字典类型 / 字典数据走 `INSERT ... SELECT ... WHERE NOT EXISTS`
+- 列添加走 `ALTER TABLE ADD IF NOT EXISTS`（达梦支持，同 V1.0.6）；`COMMENT ON COLUMN` 直接执行（重跑覆盖为同值，零副作用）
+- `UPDATE sys_dict_data` 追加 `AND dict_label='主持人'`，二次重跑 WHERE 不命中，零副作用
+- **首次执行 19/19 成功；二次重跑 19/19 全绿零副作用**
+
+**DB 复查**（`python .tmp/check_v108_after.py`，全部 PASS）：
+- `sys_dict_type` dict_id=223='项目类别'/project_category、dict_id=224='专业分类'/specialty，status='0'
+- `sys_dict_data` 20107–20109 共 3 项 / 20110–20118 共 9 项，dict_sort 顺序、dict_value 与任务卡 §1.1 一致
+- project 表含 `PROJECT_CATEGORY`/`SPECIALTY` 两列（VARCHAR，可空），列注释正确
+- `member_role` HOST 的 dict_label='组长'
+
+**依赖**：
+- V1.0.0：`project` 表
+- V1.0.1：`sys_dict_type` / `sys_dict_data` 框架表、`member_role` 字典
+
+**后续任务**：
+- 阶段2变更2 Task 2：后端（Project 两字段 + insert 必填校验 + 删除课题级联逻辑删 project_member + update 可改）
+- 阶段2变更2 Task 3：前端（两字典下拉必填 + 列表/详情展示 + 文案 主持人→组长）
+- 阶段2变更2 Task 4：冒烟（新增不传两字段报错 / 删除含组长+成员课题成功 / 回归不退化）
