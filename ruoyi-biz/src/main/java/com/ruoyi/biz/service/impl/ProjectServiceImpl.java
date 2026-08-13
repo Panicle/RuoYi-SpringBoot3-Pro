@@ -213,12 +213,14 @@ public class ProjectServiceImpl implements IProjectService {
         project.setLeaderId(db.getLeaderId());
         project.setStatus(db.getStatus());
         // 预算细分全量替换（同事务）：删旧插新，预算总额 = Σ 各科目金额
-        // 请求体未带 budgetSplitList（null）则保留原细分与总额；传空列表表示清空
+        // 请求体未带 budgetSplitList（null）则预算总额以库原值为准，忽略客户端传入值（保持 Σ 不变式）；传空列表表示清空
         if (project.getBudgetSplitList() != null) {
             BigDecimal budgetTotal = normalizeBudgetSplits(project.getBudgetSplitList());
             project.setBudgetTotal(budgetTotal);
             budgetSplitMapper.deleteByProjectId(project.getProjectId());
             attachAndInsertSplits(project.getBudgetSplitList(), project.getProjectId(), operName);
+        } else {
+            project.setBudgetTotal(db.getBudgetTotal());
         }
         if (project.getBudgetBalance() == null) {
             // 余额不通过此接口改（阶段4 维护）
