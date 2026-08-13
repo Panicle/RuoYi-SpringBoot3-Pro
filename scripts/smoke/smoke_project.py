@@ -59,9 +59,13 @@ RESULT_PATH = os.path.join(SCRIPT_DIR, "result.jsonl")
 SCI_USER_ID = 90010          # science_admin 角色 101，data_scope=1（驱动主用例，避开 admin 误判 researcher 的 bug）
 SCI_USERNAME = "test_sci_admin"
 RES_USER_ID = 90001          # researcher 角色 105
-MEM2_USER_ID = 90002         # 普通成员（不登录）
-MEM3_USER_ID = 90003         # 普通成员（不登录）
+MEM2_USER_ID = 90002         # 普通成员（不登录）— I-2 中作为 D1 成员
+MEM3_USER_ID = 90003         # 普通成员（不登录）— I-2 中作为 D2 成员
 RES_USERNAME = "test_researcher"
+DL_USER_ID = 90004           # dept_leader 角色 104，data_scope=3（本部门）— I-1/I-2 越权场景
+DL_USERNAME = "test_dept_leader"
+DEPT_D1 = 101                # test_dept_leader / test_member2 所属部门
+DEPT_D2 = 100                # 跨部门（越权目标 B_dl 所属）
 
 TEST_MARK = "smoke-task3"    # 课题 remark 标记，收尾按此清理
 
@@ -199,8 +203,9 @@ def setup_test_users() -> Tuple[bool, str]:
     users = [
         (SCI_USER_ID, SCI_USERNAME, "冒烟科管", 100, 101),
         (RES_USER_ID, RES_USERNAME, "冒烟科研人员", 100, 105),
-        (MEM2_USER_ID, "test_member2", "冒烟成员2", 100, None),
-        (MEM3_USER_ID, "test_member3", "冒烟成员3", 100, None),
+        (DL_USER_ID, DL_USERNAME, "冒烟室主任", DEPT_D1, 104),
+        (MEM2_USER_ID, "test_member2", "冒烟成员2", DEPT_D1, None),
+        (MEM3_USER_ID, "test_member3", "冒烟成员3", DEPT_D2, None),
     ]
     for uid, uname, nick, dept, role_id in users:
         ok, r = db_execute(
@@ -230,12 +235,12 @@ def cleanup_test_data() -> Tuple[bool, str]:
     ok, r = db_execute("DELETE FROM RUOYI.PROJECT WHERE REMARK = ?", [TEST_MARK])
     if not ok:
         return False, "清课题失败: " + str(r)
-    ok, r = db_execute("DELETE FROM RUOYI.SYS_USER_ROLE WHERE USER_ID IN (?, ?, ?, ?)",
-                       [SCI_USER_ID, RES_USER_ID, MEM2_USER_ID, MEM3_USER_ID])
+    ok, r = db_execute("DELETE FROM RUOYI.SYS_USER_ROLE WHERE USER_ID IN (?, ?, ?, ?, ?)",
+                       [SCI_USER_ID, RES_USER_ID, DL_USER_ID, MEM2_USER_ID, MEM3_USER_ID])
     if not ok:
         return False, "清用户角色失败: " + str(r)
-    ok, r = db_execute("DELETE FROM RUOYI.SYS_USER WHERE USER_ID IN (?, ?, ?, ?)",
-                       [SCI_USER_ID, RES_USER_ID, MEM2_USER_ID, MEM3_USER_ID])
+    ok, r = db_execute("DELETE FROM RUOYI.SYS_USER WHERE USER_ID IN (?, ?, ?, ?, ?)",
+                       [SCI_USER_ID, RES_USER_ID, DL_USER_ID, MEM2_USER_ID, MEM3_USER_ID])
     if not ok:
         return False, "清用户失败: " + str(r)
     return True, "ok"
@@ -848,6 +853,90 @@ def case_44_res_export(sess) -> Tuple[Dict[str, Any], bool]:
             "body": b, "raw": r.text[:200]}, ok, note
 
 
+# ====================== dept_leader 越权场景（终审 I-1 写操作闸门 / I-2 成员列表去别名过滤） ======================
+
+def case_51_dept_leader_setup(sess) -> Tuple[Dict[str, Any], bool]:
+    """造越权场景：A_dl(dept=D1 本部门)、B_dl(dept=D2 跨部门)；给 A_dl 加 D1/D2 两名成员。"""
+    resp_a, ok_a, pid_a = add_project(sess, "冒烟课题DL-A(本部门)", 3, project_type="NATIONAL", dept_id=DEPT_D1)
+    STATE["project_dl_a_id"] = pid_a
+    resp_b, ok_b, pid_b = add_project(sess, "冒烟课题DL-B(跨部门)", 3, project_type="NATIONAL", dept_id=DEPT_D2)
+    STATE["project_dl_b_id"] = pid_b
+    body = {"projectId": pid_a, "members": [{"userId": MEM2_USER_ID, "role": "PARTICIPANT"},
+                                            {"userId": MEM3_USER_ID, "role": "PARTICIPANT"}]}
+    r = http(sess, "POST", "/biz/project/member", json_body=body)
+    b = safe_json(r)
+    ok_m = r.status_code == 200 and isinstance(b, dict) and b.get("code") == 200
+    ok = ok_a and ok_b and ok_m
+    return {"project_dl_a_id": pid_a, "project_dl_b_id": pid_b, "add_members_body": b}, ok
+
+
+def case_52_dept_leader_own_dept_detail(sess) -> Tuple[Dict[str, Any], bool]:
+    """dept_leader 登录 + 本部门课题 A_dl 详情可见（正向对照）。"""
+    token, resp = login(sess, DL_USERNAME, ADMIN_PASS)
+    if token is None:
+        return {"login_resp": resp}, False
+    sess.headers.update({"Authorization": "Bearer " + token})
+    a_id = STATE["project_dl_a_id"]
+    r = http(sess, "GET", f"/biz/project/{a_id}")
+    b = safe_json(r)
+    data = get_data(b)
+    ok = r.status_code == 200 and isinstance(b, dict) and b.get("code") == 200 and isinstance(data, dict)
+    return {"login_code": resp.get("body", {}).get("code"), "detail_status": r.status_code,
+            "detail_code": b.get("code") if isinstance(b, dict) else None, "body": b}, ok
+
+
+def case_53_dept_leader_i1_edit_cross_dept_forbidden(sess) -> Tuple[Dict[str, Any], bool]:
+    """I-1：dept_leader PUT 修改跨部门课题 B_dl → 拒绝（业务错误），且 B_dl 未被改动。"""
+    b_id = STATE["project_dl_b_id"]
+    body = {"projectId": b_id, "projectName": "越权改名", "projectType": "NATIONAL", "remark": "i1-attempt"}
+    r = http(sess, "PUT", "/biz/project", json_body=body)
+    b = safe_json(r)
+    msg = str(b.get("msg") or "") if isinstance(b, dict) else ""
+    rejected = r.status_code == 200 and isinstance(b, dict) and b.get("code") != 200
+    _, name = db_project_field(b_id, "PROJECT_NAME")
+    _, status = db_project_field(b_id, "STATUS")
+    ok = rejected and name == "冒烟课题DL-B(跨部门)" and status == "DRAFT"
+    note = ""
+    if not ok and not rejected:
+        note = "【疑似回归】跨部门编辑未被拒绝（I-1 闸门可能未生效）"
+    return {"request_body": body, "status_code": r.status_code, "body": b, "msg": msg,
+            "db_project_name": name, "db_status": status}, ok, note
+
+
+def case_54_dept_leader_i1_changestatus_cross_dept_forbidden(sess) -> Tuple[Dict[str, Any], bool]:
+    """I-1：dept_leader changeStatus 跨部门课题 B_dl → 拒绝，状态不变。"""
+    b_id = STATE["project_dl_b_id"]
+    r = http(sess, "POST", "/biz/project/changeStatus", json_body={"projectId": b_id, "targetStatus": "ACTIVE"})
+    b = safe_json(r)
+    msg = str(b.get("msg") or "") if isinstance(b, dict) else ""
+    rejected = r.status_code == 200 and isinstance(b, dict) and b.get("code") != 200
+    _, status = db_project_field(b_id, "STATUS")
+    ok = rejected and status == "DRAFT"
+    note = ""
+    if not ok and not rejected:
+        note = "【疑似回归】跨部门 changeStatus 未被拒绝（I-1 闸门可能未生效）"
+    return {"status_code": r.status_code, "body": b, "msg": msg, "db_status": status}, ok, note
+
+
+def case_55_dept_leader_i2_member_list_cross_dept(sess) -> Dict[str, Any]:
+    """I-2：dept_leader member/list 本部门课题 A_dl → 跨部门成员不隐藏（D1+D2 两名成员都在）。"""
+    a_id = STATE["project_dl_a_id"]
+    r = http(sess, "GET", "/biz/project/member/list", params={"projectId": a_id, "pageNum": 1, "pageSize": 50})
+    b = safe_json(r)
+    rows = b.get("rows", []) if isinstance(b, dict) else []
+    user_ids = [x.get("userId") for x in rows]
+    ok = (r.status_code == 200 and isinstance(b, dict) and b.get("code") == 200
+          and MEM2_USER_ID in user_ids and MEM3_USER_ID in user_ids)
+    note = ""
+    if not ok and isinstance(b, dict) and b.get("code") != 200:
+        note = "【疑似回归】member/list 数据权限异常: " + str(b.get("msg") or "")[:80]
+    elif not ok:
+        note = "【疑似回归】跨部门成员被隐藏（D1/D2 成员未同时返回）"
+    return {"status_code": r.status_code, "body": b, "user_ids": user_ids,
+            "member_d1_present": MEM2_USER_ID in user_ids,
+            "member_d2_present": MEM3_USER_ID in user_ids}, ok, note
+
+
 def case_50_cleanup() -> Tuple[Dict[str, Any], bool]:
     ok, msg = cleanup_test_data()
     return {"cleanup": msg}, ok
@@ -953,6 +1042,20 @@ def main() -> int:
     record("43_res_write_forbidden", ok, {"url": "/biz/project (write ops)"}, resp)
     resp, ok, note44 = case_44_res_export(res_sess)
     record("44_res_export", ok, {"url": "/biz/project/export (researcher)"}, resp, note44)
+
+    # ---- dept_leader 越权场景（终审 I-1/I-2）----
+    resp, ok = case_51_dept_leader_setup(sess)  # 用 sci_admin 会话造 A_dl/B_dl + 加成员
+    record("51_dept_leader_setup", ok, {"url": "/biz/project (dept_leader scene)"}, resp)
+    dl_sess = requests.Session()
+    dl_sess.headers.update({"User-Agent": "task3-project-smoke/1.0"})
+    resp, ok = case_52_dept_leader_own_dept_detail(dl_sess)
+    record("52_dept_leader_own_dept_detail", ok, {"username": DL_USERNAME, "url": f"/biz/project/{STATE['project_dl_a_id']}"}, resp)
+    resp, ok, note = case_53_dept_leader_i1_edit_cross_dept_forbidden(dl_sess)
+    record("53_dept_leader_i1_edit_cross_dept_forbidden", ok, {"url": "PUT /biz/project (cross-dept B_dl)"}, resp, note)
+    resp, ok, note = case_54_dept_leader_i1_changestatus_cross_dept_forbidden(dl_sess)
+    record("54_dept_leader_i1_changestatus_cross_dept_forbidden", ok, {"url": "POST changeStatus (cross-dept B_dl)"}, resp, note)
+    resp, ok, note = case_55_dept_leader_i2_member_list_cross_dept(dl_sess)
+    record("55_dept_leader_i2_member_list_cross_dept", ok, {"url": "GET member/list (A_dl cross-dept member)"}, resp, note)
 
     # ---- 收尾 ----
     resp, ok = case_50_cleanup()
