@@ -41,15 +41,14 @@ public interface ProjectMapper extends BaseMapper<Project> {
 
     /**
      * 详情查询（携带数据范围校验）。
-     * researcher(data_scope=5) 时，EXISTS 子查询要求当前用户为主持人或成员。
+     * 接收单个 Project（BaseEntity）以承载 @DataScope 拦截器注入的 params.dataScope；
+     * researcher(data_scope=5) 由 Service 切换到 selectProjectScopedByIdForResearcher。
      *
-     * @param projectId     课题ID
-     * @param currentUserId 当前登录用户ID
+     * @param query 查询条件（projectId 必填；@DataScope 将 dataScope 注入其 params）
      * @return 课题（含 leaderName/deptName），不在数据范围内返回 null
      */
     @DataScope(deptAlias = "d", userAlias = "u")
-    Project selectProjectScopedById(@Param("projectId") Long projectId,
-                                    @Param("currentUserId") Long currentUserId);
+    Project selectProjectScopedById(Project query);
 
     /**
      * 详情查询（researcher 专用）：仅当 leader_id=我 OR 成员表含我 时返回

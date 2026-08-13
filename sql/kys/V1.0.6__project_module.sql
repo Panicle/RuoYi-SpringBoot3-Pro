@@ -191,7 +191,7 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE menu_id = 2019);
 --   office(102):                  2010, 2011, 2012            全所只读
 --   labor_hr(103):                2010, 2011, 2012, 2018     成员审核
 --   dept_leader(104):             2010, 2011, 2012, 2013, 2014, 2016, 2018, 2019  本部门
---   researcher(105):              2010, 2011, 2012, 2019     本人相关（数据范围data_scope=5）
+--   researcher(105):              2010, 2011, 2012, 2016, 2019  本人相关（数据范围data_scope=5；2016=export 修复轮2补充）
 -- ============================================================================
 
 -- admin 1：全部 10 个
@@ -244,10 +244,12 @@ INSERT INTO sys_role_menu (role_id, menu_id) SELECT 104, 2016 FROM DUAL WHERE NO
 INSERT INTO sys_role_menu (role_id, menu_id) SELECT 104, 2018 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = 104 AND menu_id = 2018);
 INSERT INTO sys_role_menu (role_id, menu_id) SELECT 104, 2019 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = 104 AND menu_id = 2019);
 
--- researcher 105：2010+2011+2012+2019 本人相关（不挂 add/edit/remove/member）
+-- researcher 105：2010+2011+2012+2016+2019 本人相关
+--   （2016=export 按任务卡 §9.3 researcher 可导出其本人相关数据；修复轮2 补充，幂等无副作用）
 INSERT INTO sys_role_menu (role_id, menu_id) SELECT 105, 2010 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = 105 AND menu_id = 2010);
 INSERT INTO sys_role_menu (role_id, menu_id) SELECT 105, 2011 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = 105 AND menu_id = 2011);
 INSERT INTO sys_role_menu (role_id, menu_id) SELECT 105, 2012 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = 105 AND menu_id = 2012);
+INSERT INTO sys_role_menu (role_id, menu_id) SELECT 105, 2016 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = 105 AND menu_id = 2016);
 INSERT INTO sys_role_menu (role_id, menu_id) SELECT 105, 2019 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = 105 AND menu_id = 2019);
 
 -- ============================================================================

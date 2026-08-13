@@ -5,6 +5,7 @@ import com.ruoyi.biz.domain.ProjectMember;
 import com.ruoyi.biz.mapper.ProjectMapper;
 import com.ruoyi.biz.mapper.ProjectMemberMapper;
 import com.ruoyi.biz.service.IProjectService;
+import com.ruoyi.common.core.domain.entity.SysRole;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
@@ -95,7 +96,10 @@ public class ProjectServiceImpl implements IProjectService {
             Long me = SecurityUtils.getUserId();
             p = projectMapper.selectProjectScopedByIdForResearcher(projectId, me);
         } else {
-            p = projectMapper.selectProjectScopedById(projectId, SecurityUtils.getUserId());
+            // 单参数 Project 承载 @DataScope 注入的 params.dataScope（science_admin/leader/office/dept_leader 走注解通道）
+            Project q = new Project();
+            q.setProjectId(projectId);
+            p = projectMapper.selectProjectScopedById(q);
         }
         if (p == null) {
             // 不暴露是否存在信息，统一友好提示
@@ -493,11 +497,32 @@ public class ProjectServiceImpl implements IProjectService {
     // ========================================================
 
     /**
-     * 当前登录用户是否含 researcher 角色（数据范围 data_scope=5）
+     * 当前登录用户是否「精确」为 researcher（数据范围 data_scope=5）。
+     * 不能用 SecurityUtils.hasRole("researcher")：RuoYi 的 SUPER_ADMIN 捷径会让含 admin
+     * 角色 key 的用户恒 true，导致 admin 被误路由到 researcher「本人相关」分支。
+     * 精确策略：先判 admin 短路，再遍历角色列表逐条比对 role_key。
      */
     private boolean isResearcher() {
         try {
-            return SecurityUtils.hasRole(ROLE_RESEARCHER);
+            List<SysRole> roles = SecurityUtils.getLoginUser().getUser().getRoles();
+            if (roles == null || roles.isEmpty()) {
+                return false;
+            }
+            boolean hasAdmin = false;
+            boolean hasResearcher = false;
+            for (SysRole r : roles) {
+                if (r == null || StringUtils.isEmpty(r.getRoleKey())) {
+                    continue;
+                }
+                if ("admin".equals(r.getRoleKey())) {
+                    hasAdmin = true;
+                }
+                if (ROLE_RESEARCHER.equals(r.getRoleKey())) {
+                    hasResearcher = true;
+                }
+            }
+            // 含 admin 一律走全量分支；仅含 researcher 才走本人相关
+            return hasResearcher && !hasAdmin;
         } catch (Exception e) {
             return false;
         }
