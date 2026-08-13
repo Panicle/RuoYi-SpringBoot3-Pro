@@ -2,7 +2,6 @@ package com.ruoyi.biz.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.ruoyi.biz.domain.ProjectMember;
-import com.ruoyi.common.annotation.DataScope;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -16,9 +15,10 @@ import java.util.List;
 public interface ProjectMemberMapper extends BaseMapper<ProjectMember> {
 
     /**
-     * 查询课题成员列表（自行 JOIN sys_user / sys_dept，含 userName/nickName/deptName）
+     * 查询课题成员列表（自行 JOIN sys_user / sys_dept，含 userName/nickName/deptName）。
+     * 不加 @DataScope：项目级数据范围已由 Service 层 scoped selectProjectById 校验，
+     * 成员行不应再按成员所属部门二次过滤（避免 data_scope=3 时跨部门成员被隐藏）。
      */
-    @DataScope(deptAlias = "d", userAlias = "u")
     List<ProjectMember> selectMemberList(ProjectMember query);
 
     /**

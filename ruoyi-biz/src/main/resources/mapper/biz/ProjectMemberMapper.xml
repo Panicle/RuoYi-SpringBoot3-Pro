@@ -31,7 +31,7 @@
         left join sys_dept d on u.dept_id = d.dept_id
     </sql>
 
-    <!-- 成员列表：走 @DataScope，HOST 排第一再按 user_id -->
+    <!-- 成员列表：项目级数据范围已由 Service selectProjectById 校验，此处不再按成员部门过滤；HOST 排第一再按 user_id -->
     <select id="selectMemberList" parameterType="ProjectMember" resultMap="MemberJoinUserResult">
         <include refid="selectMemberVo"/>
         <where>
@@ -39,8 +39,6 @@
             <if test="projectId != null"> and m.project_id = #{projectId} </if>
             <if test="userId != null"> and m.user_id = #{userId} </if>
             <if test="role != null and role != ''"> and m.role = #{role} </if>
-            <!-- 数据范围过滤 -->
-            ${params.dataScope}
         </where>
         order by case when m.role = 'HOST' then 0 else 1 end, m.user_id
     </select>

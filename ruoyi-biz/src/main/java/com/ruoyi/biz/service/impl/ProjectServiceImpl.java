@@ -214,6 +214,8 @@ public class ProjectServiceImpl implements IProjectService {
         if (project == null || project.getProjectId() == null) {
             throw new ServiceException("projectId 不能为空");
         }
+        // 数据权限校验（项目级范围闸门，与成员端点一致；无权访问抛"无权访问"）
+        selectProjectById(project.getProjectId());
         Project db = projectMapper.selectProjectById(project.getProjectId());
         if (db == null) {
             throw new ServiceException("课题不存在");
@@ -273,6 +275,8 @@ public class ProjectServiceImpl implements IProjectService {
         if (projectId == null || StringUtils.isEmpty(targetStatus)) {
             throw new ServiceException("参数不完整");
         }
+        // 数据权限校验（项目级范围闸门，与成员端点一致；无权访问抛"无权访问"）
+        selectProjectById(projectId);
         Project db = projectMapper.selectProjectById(projectId);
         if (db == null) {
             throw new ServiceException("课题不存在");
