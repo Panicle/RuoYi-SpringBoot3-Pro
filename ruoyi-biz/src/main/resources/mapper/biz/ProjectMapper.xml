@@ -49,6 +49,8 @@
             <if test="projectNo != null and projectNo != ''"> and p.project_no = #{projectNo} </if>
             <if test="projectName != null and projectName != ''"> and p.project_name like concat(concat('%', #{projectName}), '%') </if>
             <if test="projectType != null and projectType != ''"> and p.project_type = #{projectType} </if>
+            <if test="projectCategory != null and projectCategory != ''"> and p.project_category = #{projectCategory} </if>
+            <if test="specialty != null and specialty != ''"> and p.specialty = #{specialty} </if>
             <if test="status != null and status != ''"> and p.status = #{status} </if>
             <if test="leaderId != null"> and p.leader_id = #{leaderId} </if>
             <if test="leaderName != null and leaderName != ''"> and ul.nick_name like concat('%', #{leaderName}, '%') </if>
@@ -123,6 +125,8 @@
             <if test="projectNo != null and projectNo != ''"> and p.project_no = #{projectNo} </if>
             <if test="projectName != null and projectName != ''"> and p.project_name like concat(concat('%', #{projectName}), '%') </if>
             <if test="projectType != null and projectType != ''"> and p.project_type = #{projectType} </if>
+            <if test="projectCategory != null and projectCategory != ''"> and p.project_category = #{projectCategory} </if>
+            <if test="specialty != null and specialty != ''"> and p.specialty = #{specialty} </if>
             <if test="status != null and status != ''"> and p.status = #{status} </if>
             <if test="leaderId != null"> and p.leader_id = #{leaderId} </if>
             <if test="leaderName != null and leaderName != ''"> and ul.nick_name like concat('%', #{leaderName}, '%') </if>
