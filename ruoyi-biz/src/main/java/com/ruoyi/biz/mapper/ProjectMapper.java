@@ -77,8 +77,12 @@ public interface ProjectMapper extends BaseMapper<Project> {
                      @Param("budgetTotal") BigDecimal budgetTotal);
 
     /**
-     * 查询指定年份的课题编号最大流水号（用于生成 KY-{yyyy}-{3位流水}）。
-     * 返回 3 位数字的最大值；若无返回 null。
+     * 按课题编号查重（人工输入编号唯一性校验）。
+     * 不按 del_flag 过滤：DB 唯一索引 idx_project_no_uk 对软删行同样生效，
+     * 故需连同软删行一起判定，给友好业务错误而非 DB 唯一冲突。
+     *
+     * @param projectNo 课题编号
+     * @return 已占用返回对应 project_id，否则 null
      */
-    Long selectMaxSeqByYear(@Param("year") String year);
+    Long selectByProjectNo(@Param("projectNo") String projectNo);
 }
