@@ -133,6 +133,9 @@ public class CooperativeUnitServiceImpl implements ICooperativeUnitService {
         if (oldUnit == null) {
             throw new ServiceException("单位不存在");
         }
+        if (!"0".equals(oldUnit.getDelFlag())) {
+            throw new ServiceException("单位已删除，不允许修改");
+        }
         Long parentId = unit.getParentId();
         if (parentId == null) {
             parentId = oldUnit.getParentId();
@@ -171,6 +174,8 @@ public class CooperativeUnitServiceImpl implements ICooperativeUnitService {
             // 子单位类型继承父级不可改（含换父级时改为新父类型）
             unit.setUnitType(newParent.getUnitType());
             unit.setExternalUnitType(newParent.getExternalUnitType());
+            // 换父级同样受层级深度约束（COMPANY≤3层 / SCHOOL≤2层），防止移动绕过 insert 校验
+            validateUnitDepth(unit);
         }
         return cooperativeUnitMapper.updateById(unit);
     }
@@ -313,7 +318,7 @@ public class CooperativeUnitServiceImpl implements ICooperativeUnitService {
     private void updateUnitChildren(Long unitId, String newAncestors, String oldAncestors) {
         List<CooperativeUnit> children = cooperativeUnitMapper.selectChildrenUnitById(unitId);
         for (CooperativeUnit child : children) {
-            child.setAncestors(child.getAncestors().replaceFirst(oldAncestors, newAncestors));
+            child.setAncestors(newAncestors + child.getAncestors().substring(oldAncestors.length()));
         }
         if (children.size() > 0) {
             cooperativeUnitMapper.updateUnitChildren(children);
