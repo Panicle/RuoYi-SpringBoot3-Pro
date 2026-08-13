@@ -16,6 +16,7 @@
 | 5 | V1.0.4__roles.sql | devdm | Claude Code | 2026-08-11 | ✅ 6业务角色（100-105）+ 29条角色菜单挂载 |
 | 6 | V1.0.5__profile_into_user.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-11 | ✅ 53/53语句成功（首次+幂等复查各一次）：表结构3列变更+3字典（23项）+ 菜单迁移+ 视图重建 |
 | 7 | V1.0.6__project_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-12 | ✅ 64/64语句成功（首次+幂等复查各一次）：表结构2列+唯一索引+字典1类型6项+菜单10项+角色菜单挂载39条；DB复查（project 17列/唯一索引/dict_id=221/菜单2010-2019/7角色挂载）全部 PASS |
+| 8 | V1.0.7__budget_breakdown.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 12/12语句成功（首次+幂等复查各一次）：字典 budget_category（dict_id=222 + dict_data 20097-20106 共10项）+ budget_split.category 注释更新；DB复查（dict_type=222/dict_data 10项顺序与值/注释）全部 PASS |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
@@ -134,6 +135,7 @@
 | 5 | `V1.0.4__roles.sql` | 6 业务角色（100-105）+ sys_role_menu 挂载 |
 | 6 | `V1.0.5__profile_into_user.sql` | 科研档案并入用户管理（删 id_number + 补 degree/major/bio + 3 字典） |
 | 7 | `V1.0.6__project_module.sql` | 阶段2课题管理基线：project 加 2 列 + 唯一索引 + project_type 字典 6 项 + 菜单 2010-2019 + 6 业务角色差异化挂载 |
+| 8 | `V1.0.7__budget_breakdown.sql` | 阶段2变更1预算细分基线：预算科目字典 budget_category（dict_id=222，dict_data 20097-20106 共10项）+ budget_split.category 注释更新 |
 
 ---
 
@@ -193,3 +195,50 @@
 - 阶段2 Task 1：后端 9 文件实现（Project Domain / ProjectMember Domain / ProjectMapper / ProjectMemberMapper / 对应 XML / IProjectService / ProjectServiceImpl / ProjectController）+ `mvn clean compile -DskipTests` 通过
 - 阶段2 Task 2：前端 3 文件（api/biz/project.js + views/biz/project/index.vue + views/biz/project/detail.vue）
 - 阶段2 Task 3：冒烟测试（状态机非法迁移 / 唯一 HOST 约束 / 换主持人事务 / researcher 数据权限）
+
+---
+
+## V1.0.7 — 阶段2变更1 课题预算细分基线
+
+**日期**：2026-08-13
+
+**任务卡关联**：阶段2 课题管理·变更1 / Task 1：V1.0.7 SQL（预算科目字典）+ devdm 执行 + changelog
+
+**变更内容**：
+
+1. **新增字典 `budget_category`**（dict_id=222，dict_name='预算科目'，dict_type='budget_category'，status='0'）
+   - dict_data 20097–20106 共 10 项（dict_sort 1-10，dict_value 大写），对应预算总额拆分的 10 个叶子科目：
+     - `LABOR` 人工费（primary，直接费）
+     - `EQUIPMENT` 设备费（success，直接费）
+     - `MATERIAL` 材料费（info，直接费/业务费）
+     - `TESTING` 测试化验加工费（warning，直接费/业务费）
+     - `FUEL` 燃料动力费（default，直接费/业务费）
+     - `TRAVEL` 差旅费会议费国际合作交流费（primary，直接费/业务费）
+     - `PUBLICATION` 出版文献信息传播知识产权事务费（info，直接费/业务费）
+     - `INDIRECT` 间接费（warning，顶级）
+     - `OUTSOURCING` 委外支出费（primary，顶级）
+     - `TAX` 税金（danger，顶级）
+
+2. **budget_split.category 列注释更新**（表已存在 V1.0.0，无 DDL 变更）
+   - `'经费类别（对应字典 expense_category）'` → `'预算科目（对应字典 budget_category）'`
+   - category 字段语义由 expense_category 改为 budget_category
+
+**幂等性设计**：
+- 字典类型 / 字典数据走 `INSERT ... SELECT ... WHERE NOT EXISTS`
+- `COMMENT ON COLUMN` 直接执行（达梦重跑覆盖为同值，零副作用，与 V1.0.6 一致）
+- **首次执行 12/12 成功；二次重跑 12/12 全绿零副作用**
+
+**DB 复查**（`python .tmp/check_v107_after.py`，全部 PASS）：
+- `sys_dict_type` dict_id=222=dict_name='预算科目'/dict_type='budget_category'/status='0'
+- `sys_dict_data` dict_code 20097–20106 共 10 项，dict_sort 顺序 / dict_value 大写 / list_class 与任务卡 §1.2 科目对应
+- `budget_split.category` 注释已更新为「预算科目（对应字典 budget_category）」
+
+**依赖**：
+- V1.0.0：`budget_split` 表（split_id/project_id/category/budget_amount 等 10 列）
+- V1.0.1：`sys_dict_type` / `sys_dict_data` 框架表
+
+**后续任务**：
+- 阶段2变更1 Task 2：后端（BudgetSplit 三件套 + Project 编号人工输入/预算细分保存/总额Σ/详情返回）
+- 阶段2变更1 Task 3：前端（编号输入 + 预算细分分组表单 + 详情展示）
+- 阶段2变更1 Task 4：冒烟（编号人工/唯一、预算Σ、回归）+ 数据权限抽查
+- 挂账：监管上限校验（间接费/委外费比例）不在本变更范围
