@@ -145,13 +145,13 @@ public class ProjectServiceImpl implements IProjectService {
             throw new ServiceException("专业分类不能为空");
         }
         if (project.getLeaderId() == null) {
-            throw new ServiceException("主持人不能为空");
+            throw new ServiceException("组长不能为空");
         }
-        // 1. 校验主持人存在
+        // 1. 校验组长存在
         if (sysUserMapper.selectUserById(project.getLeaderId()) == null) {
-            throw new ServiceException("主持人用户不存在");
+            throw new ServiceException("组长用户不存在");
         }
-        // 2. 默认 dept_id 取主持人部门
+        // 2. 默认 dept_id 取组长部门
         if (project.getDeptId() == null) {
             com.ruoyi.common.core.domain.entity.SysUser u = sysUserMapper.selectUserById(project.getLeaderId());
             project.setDeptId(u == null ? null : u.getDeptId());
@@ -186,8 +186,8 @@ public class ProjectServiceImpl implements IProjectService {
         try {
             projectMemberMapper.insert(host);
         } catch (DuplicateKeyException e) {
-            // 极端：主持人成员行已存在（一般不会）
-            throw new ServiceException("主持人成员行写入冲突");
+            // 极端：组长成员行已存在（一般不会）
+            throw new ServiceException("组长成员行写入冲突");
         }
 
         // 7. 写入预算细分（与主表同事务；projectId 需等主表 insert 回填）
@@ -247,6 +247,8 @@ public class ProjectServiceImpl implements IProjectService {
             return 0;
         }
         for (Long pid : projectIds) {
+            // 数据权限校验（项目级范围闸门，与其余变更操作一致；无权访问抛"无权访问"）
+            selectProjectById(pid);
             Project p = projectMapper.selectProjectById(pid);
             if (p == null) {
                 throw new ServiceException("课题[" + pid + "]不存在或已删除");
@@ -331,7 +333,7 @@ public class ProjectServiceImpl implements IProjectService {
         // 数据权限校验
         selectProjectById(projectId);
 
-        // 校验课题是否存在 + 拒绝 HOST（换主持人必须走专用接口）
+        // 校验课题是否存在 + 拒绝 HOST（换组长必须走专用接口）
         Project p = projectMapper.selectProjectById(projectId);
         if (p == null) {
             throw new ServiceException("课题不存在");
@@ -354,7 +356,7 @@ public class ProjectServiceImpl implements IProjectService {
             }
             // 拒 HOST：业务错误
             if (ROLE_HOST.equalsIgnoreCase(m.getRole())) {
-                throw new ServiceException("换主持人请用专用接口");
+                throw new ServiceException("换组长请用专用接口");
             }
             // 默认角色 PARTICIPANT
             if (StringUtils.isEmpty(m.getRole())) {
@@ -419,7 +421,7 @@ public class ProjectServiceImpl implements IProjectService {
             }
             for (Long mid : memberIds) {
                 if (mid.equals(h.getMemberId())) {
-                    throw new ServiceException("不能删除课题[" + pid + "]的唯一 HOST，请先换主持人");
+                    throw new ServiceException("不能删除课题[" + pid + "]的唯一组长，请先换组长");
                 }
             }
         }
@@ -438,17 +440,17 @@ public class ProjectServiceImpl implements IProjectService {
             throw new ServiceException("课题不存在");
         }
         if (STATUS_ARCHIVED.equals(p.getStatus())) {
-            throw new ServiceException("已归档课题不可换主持人");
+            throw new ServiceException("已归档课题不可换组长");
         }
         selectProjectById(projectId);
 
         // 2. 取当前 HOST
         ProjectMember currentHost = projectMemberMapper.selectHostMember(projectId);
         if (currentHost == null) {
-            throw new ServiceException("当前课题无 HOST，无法换主持人");
+            throw new ServiceException("当前课题无 HOST，无法换组长");
         }
         if (newLeaderUserId.equals(currentHost.getUserId())) {
-            throw new ServiceException("新主持人已是当前 HOST，无需切换");
+            throw new ServiceException("新组长已是当前 HOST，无需切换");
         }
 
         // 3. 新用户是否已是成员（任意 role + del_flag='0'）

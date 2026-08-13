@@ -88,7 +88,7 @@ public class ProjectController extends BaseController {
     }
 
     /**
-     * 删除课题（逻辑删除；存在有效成员时拒）
+     * 删除课题（逻辑删除；级联逻辑删除全部成员含组长）
      */
     @PreAuthorize("@ss.hasPermi('biz:project:remove')")
     @Log(title = "课题管理", businessType = BusinessType.DELETE)
@@ -201,7 +201,7 @@ public class ProjectController extends BaseController {
     }
 
     /**
-     * 换主持人（事务内）
+     * 换组长（事务内）
      */
     @PreAuthorize("@ss.hasPermi('biz:project:member')")
     @Log(title = "课题成员", businessType = BusinessType.UPDATE)

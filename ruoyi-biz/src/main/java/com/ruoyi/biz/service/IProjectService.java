@@ -34,7 +34,7 @@ public interface IProjectService {
     int updateProject(Project project, String operName);
 
     /**
-     * 逻辑删除（有有效成员时拒绝）
+     * 逻辑删除（级联逻辑删除全部成员含组长，与课题删除同事务）
      */
     int deleteProjectByIds(Long[] projectIds, String operName);
 
@@ -64,7 +64,7 @@ public interface IProjectService {
     int removeMembers(Long[] memberIds, String operName);
 
     /**
-     * 换主持人（事务内完成：HOST→PARTICIPANT、新成员→HOST、同步 leader_id）
+     * 换组长（事务内完成：HOST→PARTICIPANT、新成员→HOST、同步 leader_id）
      */
     int changeHost(Long projectId, Long newLeaderUserId, String operName);
 

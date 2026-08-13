@@ -33,7 +33,7 @@ public interface ProjectMemberMapper extends BaseMapper<ProjectMember> {
                                      @Param("userId") Long userId);
 
     /**
-     * 修改成员角色（换主持人、HOST 转 PARTICIPANT 等）
+     * 修改成员角色（换组长、HOST 转 PARTICIPANT 等）
      */
     int updateRole(@Param("memberId") Long memberId,
                    @Param("role") String role,

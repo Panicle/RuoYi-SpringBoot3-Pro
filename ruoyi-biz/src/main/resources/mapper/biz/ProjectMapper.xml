@@ -91,7 +91,7 @@
           and del_flag   = '0'
     </update>
 
-    <!-- 更新主持人（changeHost 事务最后一步） -->
+    <!-- 更新组长（changeHost 事务最后一步） -->
     <update id="updateLeader">
         update project
         set leader_id   = #{newLeaderId},

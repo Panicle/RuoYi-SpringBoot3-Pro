@@ -64,7 +64,7 @@ public interface ProjectMapper extends BaseMapper<Project> {
                      @Param("updateBy") String updateBy);
 
     /**
-     * 更新主持人（换主持人事务调用）
+     * 更新组长（换组长事务调用）
      */
     int updateLeader(@Param("projectId") Long projectId,
                      @Param("newLeaderId") Long newLeaderId,

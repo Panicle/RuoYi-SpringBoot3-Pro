@@ -58,7 +58,7 @@ public class Project extends BaseEntity {
     private String projectName;
 
     /** 课题负责人ID（关联 sys_user.user_id） */
-    @Excel(name = "主持人ID")
+    @Excel(name = "组长ID")
     @TableField("leader_id")
     private Long leaderId;
 
@@ -99,7 +99,7 @@ public class Project extends BaseEntity {
 
     // ====== 视图关联字段（来自 sys_user / sys_dept JOIN，非 project 字段） ======
 
-    /** 主持人姓名（来自 sys_user.nick_name，列表/详情展示） */
+    /** 组长姓名（来自 sys_user.nick_name，列表/详情展示） */
     @TableField(exist = false)
     private String leaderName;
 

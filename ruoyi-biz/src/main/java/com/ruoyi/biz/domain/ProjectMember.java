@@ -36,7 +36,7 @@ public class ProjectMember extends BaseEntity {
     private Long userId;
 
     /** 课题内角色（字典 member_role：HOST/PARTICIPANT） */
-    @Excel(name = "角色", dictType = "member_role", readConverterExp = "HOST=主持人,PARTICIPANT=参与人")
+    @Excel(name = "角色", dictType = "member_role", readConverterExp = "HOST=组长,PARTICIPANT=参与人")
     @TableField("role")
     private String role;
 
