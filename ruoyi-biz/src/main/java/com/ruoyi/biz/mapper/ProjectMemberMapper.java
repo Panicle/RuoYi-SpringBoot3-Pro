@@ -33,7 +33,7 @@ public interface ProjectMemberMapper extends BaseMapper<ProjectMember> {
                                      @Param("userId") Long userId);
 
     /**
-     * 修改成员角色（换主持人、HOST 转 PARTICIPANT 等）
+     * 修改成员角色（换组长、HOST 转 PARTICIPANT 等）
      */
     int updateRole(@Param("memberId") Long memberId,
                    @Param("role") String role,
@@ -44,6 +44,12 @@ public interface ProjectMemberMapper extends BaseMapper<ProjectMember> {
      */
     int softDeleteByIds(@Param("memberIds") Long[] memberIds,
                         @Param("updateBy") String updateBy);
+
+    /**
+     * 按课题逻辑删除全部有效成员（删除课题级联，含组长；del_flag='2'）
+     */
+    int softDeleteByProjectId(@Param("projectId") Long projectId,
+                              @Param("updateBy") String updateBy);
 
     /**
      * 查询某 member_id 对应的课题ID（删除前校验数据权限）

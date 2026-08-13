@@ -249,8 +249,13 @@ def cleanup_test_data() -> Tuple[bool, str]:
 # ====================== 用例：课题 CRUD ======================
 
 def add_project(sess, name: str, leader_id: int, project_type: str = "NATIONAL",
-                dept_id: int = None, start_date: str = None, budget: str = None) -> Tuple[Dict, bool, Optional[int]]:
+                dept_id: int = None, start_date: str = None, budget: str = None,
+                project_category: str = "A", specialty: str = "Y") -> Tuple[Dict, bool, Optional[int]]:
+    # 适配当前后端 insert 必填：阶段1变更1 projectNo 人工必填；阶段2变更2 projectCategory/specialty 必填
+    STATE["no_seq"] = STATE.get("no_seq", (int(time.time()) % 800) + 100) + 1
     body = {"projectName": name, "projectType": project_type, "leaderId": leader_id,
+            "projectNo": f"KY-2026-{(STATE['no_seq'] % 900) + 100:03d}",
+            "projectCategory": project_category, "specialty": specialty,
             "remark": TEST_MARK}
     if dept_id is not None:
         body["deptId"] = dept_id
@@ -548,12 +553,13 @@ def case_28_edit_project(sess) -> Dict[str, Any]:
     _, no = db_project_field(b_id, "PROJECT_NO")
     _, status = db_project_field(b_id, "STATUS")
     _, budget = db_project_field(b_id, "BUDGET_TOTAL")
+    # 变更1起 budgetTotal 由预算细分推导（本次 edit 未带 splits → 清空 → 0.0），不再支持直接改 budgetTotal
     ok = (ok_update
           and name == "冒烟课题B-无关课题-已改名"
           and leader == 3
           and no == STATE["project_b_no"]
           and status == "DRAFT"
-          and budget is not None and abs(float(budget) - 888.0) < 0.001)
+          and budget is not None and abs(float(budget) - 0.0) < 0.001)
     return {"request_body": body, "status_code": r.status_code, "put_body": b,
             "db_verify": {"project_name": name, "leader_id": leader, "project_no": no,
                           "status": status, "budget_total": str(budget)},
@@ -561,13 +567,26 @@ def case_28_edit_project(sess) -> Dict[str, Any]:
 
 
 def case_29_delete_with_members_rejected(sess) -> Dict[str, Any]:
-    """课题仍有有效成员 → 删除拒绝。"""
-    c_id = STATE["project_c_id"]
-    r = http(sess, "DELETE", f"/biz/project/{c_id}")
+    """变更2：课题含组长+成员 → 删除级联成功（移除旧'仍有有效成员'阻塞）。
+    用独立课题验证，避免误删 C 影响 case_33。"""
+    resp, ok, pid = add_project(sess, "冒烟课题G-级联删除", 3, project_type="NATIONAL")
+    if not ok:
+        return {"error": "造课题失败: " + str(resp.get("body"))}, False
+    body = {"projectId": pid, "members": [{"userId": MEM2_USER_ID, "role": "PARTICIPANT"}]}
+    r = http(sess, "POST", "/biz/project/member", json_body=body)
+    b_add = safe_json(r)
+    if not (r.status_code == 200 and isinstance(b_add, dict) and b_add.get("code") == 200):
+        return {"error": "加成员失败", "body": b_add}, False
+    r = http(sess, "DELETE", f"/biz/project/{pid}")
     b = safe_json(r)
-    msg = str(b.get("msg") or "") if isinstance(b, dict) else ""
-    ok = r.status_code == 200 and isinstance(b, dict) and b.get("code") != 200 and "仍有有效成员" in msg
-    return {"status_code": r.status_code, "body": b, "raw": r.text[:400]}, ok
+    ok_del = r.status_code == 200 and isinstance(b, dict) and b.get("code") == 200
+    ok2, res = db_query("SELECT DEL_FLAG FROM RUOYI.PROJECT WHERE PROJECT_ID = ?", [pid])
+    proj_del = res["rows"][0][0] if ok2 and res["rows"] else None
+    ok3, res3 = db_query("SELECT DEL_FLAG FROM RUOYI.PROJECT_MEMBER WHERE PROJECT_ID = ?", [pid])
+    mem_dels = [x[0] for x in res3["rows"]] if ok3 and res3["rows"] else []
+    ok = ok_del and proj_del == "2" and len(mem_dels) >= 2 and all(x == "2" for x in mem_dels)
+    return {"status_code": r.status_code, "body": b, "db_project_del_flag": proj_del,
+            "db_member_del_flags": mem_dels}, ok
 
 
 def case_30_state_legal_chain(sess) -> Tuple[Dict[str, Any], bool]:

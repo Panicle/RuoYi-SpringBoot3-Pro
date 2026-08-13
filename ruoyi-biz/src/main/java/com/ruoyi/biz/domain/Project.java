@@ -42,13 +42,23 @@ public class Project extends BaseEntity {
     @TableField("project_type")
     private String projectType;
 
+    /** 项目类别（字典 project_category：A全额资助课题/B定额补助课题/C经费全部自筹课题，V1.0.8 新增，必填） */
+    @Excel(name = "项目类别", dictType = "project_category")
+    @TableField("project_category")
+    private String projectCategory;
+
+    /** 专业分类（字典 specialty：Y运输/J机务/GD供电/C车辆/G工务工程/D电务/X信息技术/Z综合/F软科学，V1.0.8 新增，必填） */
+    @Excel(name = "专业分类", dictType = "specialty")
+    @TableField("specialty")
+    private String specialty;
+
     /** 课题名称 */
     @Excel(name = "课题名称")
     @TableField("project_name")
     private String projectName;
 
     /** 课题负责人ID（关联 sys_user.user_id） */
-    @Excel(name = "主持人ID")
+    @Excel(name = "组长ID")
     @TableField("leader_id")
     private Long leaderId;
 
@@ -89,7 +99,7 @@ public class Project extends BaseEntity {
 
     // ====== 视图关联字段（来自 sys_user / sys_dept JOIN，非 project 字段） ======
 
-    /** 主持人姓名（来自 sys_user.nick_name，列表/详情展示） */
+    /** 组长姓名（来自 sys_user.nick_name，列表/详情展示） */
     @TableField(exist = false)
     private String leaderName;
 
