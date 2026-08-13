@@ -149,8 +149,9 @@ public class CooperativeUnitServiceImpl implements ICooperativeUnitService {
             // 移到顶级：ancestors 置空，并同步全部后代 ancestors
             String newAncestors = "";
             String oldAncestors = oldUnit.getAncestors();
+            // ancestors 无条件重算（防止父级未变时 body 直写绕过）
+            unit.setAncestors("");
             if (!StringUtils.equals(newAncestors, oldAncestors)) {
-                unit.setAncestors("");
                 updateUnitChildren(unit.getUnitId(), newAncestors, oldAncestors);
             }
         } else {
@@ -167,15 +168,23 @@ public class CooperativeUnitServiceImpl implements ICooperativeUnitService {
             }
             String newAncestors = newParent.getAncestors() + "," + parentId;
             String oldAncestors = oldUnit.getAncestors();
+            // 换父前先算子树最深相对层数，防止移动后后代超限（UI 可达）
+            int maxRel = 0;
+            for (CooperativeUnit c : cooperativeUnitMapper.selectChildrenUnitById(unit.getUnitId())) {
+                maxRel = Math.max(maxRel, countAncestors(c.getAncestors()) - countAncestors(oldAncestors));
+            }
+            CooperativeUnit probe = new CooperativeUnit();
+            probe.setExternalUnitType(newParent.getExternalUnitType());
+            probe.setAncestors(newAncestors + "," + "0".repeat(maxRel));
+            validateUnitDepth(probe);
+            // ancestors 无条件重算（防止父级未变时 body 直写绕过）
+            unit.setAncestors(newAncestors);
             if (!StringUtils.equals(newAncestors, oldAncestors)) {
-                unit.setAncestors(newAncestors);
                 updateUnitChildren(unit.getUnitId(), newAncestors, oldAncestors);
             }
             // 子单位类型继承父级不可改（含换父级时改为新父类型）
             unit.setUnitType(newParent.getUnitType());
             unit.setExternalUnitType(newParent.getExternalUnitType());
-            // 换父级同样受层级深度约束（COMPANY≤3层 / SCHOOL≤2层），防止移动绕过 insert 校验
-            validateUnitDepth(unit);
         }
         return cooperativeUnitMapper.updateById(unit);
     }

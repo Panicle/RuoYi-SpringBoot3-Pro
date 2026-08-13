@@ -853,10 +853,51 @@ def case_7_move_parent(sess) -> Dict[str, Any]:
         depth_reject = False
         out["D3_reject"] = {"skipped": True}
 
-    ok = q_ok and edit_ok and b_ancestors_ok and c_ancestors_ok and self_reject and desc_reject and d2_ok and depth_reject
+    # 7.8 换父子树深度校验：B 带 C 子，移到另一树 depth=1 节点 R 下
+    #   拓扑：Q2(顶级)→R(depth=1) ; 原 A→B→C 中 C 在 B 下（depth=2）
+    #   移 B 到 R：B.ancestors=",Q2,R" depth=2 OK；但 C.ancestors=",Q2,R,B" depth=3 → 应被拒
+    time.sleep(2.5)
+    body_q2 = make_unit_body(f"{TEST_MARK}-M7-Q2", 0, "COMPANY")
+    r_q2 = http(sess, "POST", "/biz/unit", json_body=body_q2)
+    q2_id = _find_unit_id(sess, body_q2["unitName"], 0) if isinstance(safe_json(r_q2), dict) and safe_json(r_q2).get("code") == 200 else None
+    if q2_id is None:
+        out["subtree_depth_skip"] = "Q2 顶级创建失败"
+        subtree_reject = False
+    else:
+        time.sleep(2.5)
+        body_r = make_unit_body(f"{TEST_MARK}-M7-R", q2_id, "COMPANY")
+        r_r = http(sess, "POST", "/biz/unit", json_body=body_r)
+        r_id = _find_unit_id(sess, body_r["unitName"], q2_id) if isinstance(safe_json(r_r), dict) and safe_json(r_r).get("code") == 200 else None
+        if r_id is None:
+            out["subtree_depth_skip"] = "R 子节点创建失败"
+            subtree_reject = False
+        else:
+            time.sleep(2.5)
+            body_move = {
+                "unitId": b_id,
+                "unitName": f"{TEST_MARK}-M7-B",
+                "parentId": r_id,
+                "remark": TEST_MARK,
+            }
+            r_move = http(sess, "PUT", "/biz/unit", json_body=body_move)
+            bm = safe_json(r_move)
+            msg = str(bm.get("msg") or "") if isinstance(bm, dict) else ""
+            subtree_reject = (r_move.status_code == 200 and isinstance(bm, dict)
+                              and bm.get("code") != 200 and "公司层级最多三层" in msg)
+            out["B_move_with_subtree_reject"] = {
+                "body": body_move, "status_code": r_move.status_code, "resp": bm, "msg": msg
+            }
+            # 复查：B/C.ancestors 未变（拒绝路径不应触发 update）
+            ok_after, res_after = db_query(
+                "SELECT PARENT_ID, ANCESTORS FROM RUOYI.COOPERATIVE_UNIT WHERE UNIT_ID IN (?, ?)",
+                [b_id, c_id])
+            out["B_C_unchanged"] = (res_after["rows"] if ok_after else None)
+
+    ok = q_ok and edit_ok and b_ancestors_ok and c_ancestors_ok and self_reject and desc_reject and d2_ok and depth_reject and subtree_reject
     return out, ok, "" if ok else (
         f"q={q_ok} edit={edit_ok} b_anc={b_ancestors_ok} c_anc={c_ancestors_ok} "
-        f"self={self_reject} desc={desc_reject} d2={d2_ok} depth={depth_reject}")
+        f"self={self_reject} desc={desc_reject} d2={d2_ok} depth={depth_reject} "
+        f"subtree={subtree_reject}")
 
 
 # ============================================================
