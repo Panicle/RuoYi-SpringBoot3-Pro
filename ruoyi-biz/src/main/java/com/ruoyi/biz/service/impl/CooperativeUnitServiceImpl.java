@@ -175,7 +175,7 @@ public class CooperativeUnitServiceImpl implements ICooperativeUnitService {
             }
             CooperativeUnit probe = new CooperativeUnit();
             probe.setExternalUnitType(newParent.getExternalUnitType());
-            probe.setAncestors(newAncestors + "," + "0".repeat(maxRel));
+            probe.setAncestors(newAncestors + ",0".repeat(maxRel));
             validateUnitDepth(probe);
             // ancestors 无条件重算（防止父级未变时 body 直写绕过）
             unit.setAncestors(newAncestors);
