@@ -104,11 +104,11 @@
           and del_flag   = '0'
     </update>
 
-    <!-- 取指定年份最大流水号；返回 Long，无则 null -->
-    <select id="selectMaxSeqByYear" resultType="java.lang.Long">
-        select max(to_number(substr(project_no, 9)))
+    <!-- 按课题编号查重（含软删行，与 DB 唯一索引 idx_project_no_uk 兜底一致；唯一索引下至多 1 行） -->
+    <select id="selectByProjectNo" resultType="java.lang.Long">
+        select project_id
           from project
-         where project_no like concat('KY-', #{year}, '-%')
+         where project_no = #{projectNo}
     </select>
 
     <!-- researcher 列表（本人相关）：leader_id = currentUserId OR 成员表中存在 currentUserId -->

@@ -13,6 +13,7 @@ import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 课题对象 project
@@ -31,7 +32,7 @@ public class Project extends BaseEntity {
     @TableId(value = "project_id", type = IdType.AUTO)
     private Long projectId;
 
-    /** 课题编号（格式 KY-{yyyy}-{3位流水}，V1.0.6 新增，唯一） */
+    /** 课题编号（人工输入业务编号，唯一） */
     @Excel(name = "课题编号")
     @TableField("project_no")
     private String projectNo;
@@ -104,4 +105,10 @@ public class Project extends BaseEntity {
     /** 状态字典翻译（详情页用） */
     @TableField(exist = false)
     private String statusLabel;
+
+    // ====== 预算细分（来自 budget_split，非 project 字段） ======
+
+    /** 预算细分列表（详情/编辑回显；新增/修改请求体携带，预算总额 = Σ 各科目金额） */
+    @TableField(exist = false)
+    private List<BudgetSplit> budgetSplitList;
 }

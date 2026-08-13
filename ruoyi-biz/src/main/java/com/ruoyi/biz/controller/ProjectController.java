@@ -64,7 +64,7 @@ public class ProjectController extends BaseController {
     }
 
     /**
-     * 新增课题
+     * 新增课题（projectNo 必填 + 唯一；请求体可带 budgetSplitList 预算细分，预算总额 = Σ）
      */
     @PreAuthorize("@ss.hasPermi('biz:project:add')")
     @Log(title = "课题管理", businessType = BusinessType.INSERT)
@@ -76,7 +76,7 @@ public class ProjectController extends BaseController {
     }
 
     /**
-     * 修改课题（禁改 leaderId/projectNo/status；ARCHIVED 拒）
+     * 修改课题（禁改 leaderId/projectNo/status；请求体带 budgetSplitList 时全量替换预算细分，预算总额 = Σ；ARCHIVED 拒）
      */
     @PreAuthorize("@ss.hasPermi('biz:project:edit')")
     @Log(title = "课题管理", businessType = BusinessType.UPDATE)

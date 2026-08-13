@@ -1,7 +1,9 @@
 package com.ruoyi.biz.service.impl;
 
+import com.ruoyi.biz.domain.BudgetSplit;
 import com.ruoyi.biz.domain.Project;
 import com.ruoyi.biz.domain.ProjectMember;
+import com.ruoyi.biz.mapper.BudgetSplitMapper;
 import com.ruoyi.biz.mapper.ProjectMapper;
 import com.ruoyi.biz.mapper.ProjectMemberMapper;
 import com.ruoyi.biz.service.IProjectService;
@@ -18,10 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -65,6 +65,7 @@ public class ProjectServiceImpl implements IProjectService {
 
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final BudgetSplitMapper budgetSplitMapper;
     private final SysUserMapper sysUserMapper;
 
     // ========================================================
@@ -116,11 +117,13 @@ public class ProjectServiceImpl implements IProjectService {
                         projectId, p.getLeaderId(), host.getUserId());
             }
         }
+        // 预算细分（详情/编辑回显）
+        p.setBudgetSplitList(budgetSplitMapper.selectByProjectId(projectId));
         return p;
     }
 
     // ========================================================
-    //  新增（含 project_no 生成 + HOST 写入 + 唯一索引重试）
+    //  新增（project_no 人工输入校验 + HOST 写入 + 预算细分入库）
     // ========================================================
 
     @Override
@@ -147,37 +150,25 @@ public class ProjectServiceImpl implements IProjectService {
             com.ruoyi.common.core.domain.entity.SysUser u = sysUserMapper.selectUserById(project.getLeaderId());
             project.setDeptId(u == null ? null : u.getDeptId());
         }
-        // 3. 预算默认 0.00
-        if (project.getBudgetTotal() == null) {
-            project.setBudgetTotal(BigDecimal.ZERO);
+        // 3. 课题编号：人工输入必填 + 查重（DB 唯一索引 idx_project_no_uk 兜底，含软删行）
+        if (StringUtils.isEmpty(project.getProjectNo())) {
+            throw new ServiceException("课题编号不能为空");
         }
+        if (projectMapper.selectByProjectNo(project.getProjectNo()) != null) {
+            throw new ServiceException("课题编号已存在");
+        }
+        // 4. 预算总额 = Σ 预算细分（金额 ≥ 0 校验；null 视为 0）
+        BigDecimal budgetTotal = normalizeBudgetSplits(project.getBudgetSplitList());
+        project.setBudgetTotal(budgetTotal);
         if (project.getBudgetBalance() == null) {
-            project.setBudgetBalance(project.getBudgetTotal());
+            project.setBudgetBalance(budgetTotal);
         }
         project.setStatus(STATUS_DRAFT);
         project.setDelFlag("0");
         project.setCreateBy(operName);
 
-        // 4. 生成 project_no（§3.3），唯一索引兜底：冲突时刷新 max 重试 1 次
-        String year = new SimpleDateFormat("yyyy").format(new Date());
-        String projectNo = generateProjectNo(year);
-        project.setProjectNo(projectNo);
-
-        // 5. INSERT（带重试）
-        boolean inserted = false;
-        for (int attempt = 0; attempt < 2 && !inserted; attempt++) {
-            try {
-                projectMapper.insert(project);
-                inserted = true;
-            } catch (DuplicateKeyException e) {
-                log.warn("课题编号 {} 唯一冲突，第 {} 次重试", projectNo, attempt + 1);
-                projectNo = generateProjectNo(year);
-                project.setProjectNo(projectNo);
-            }
-        }
-        if (!inserted) {
-            throw new ServiceException("课题编号生成冲突，请稍后重试");
-        }
+        // 5. INSERT 课题主表（人工编号唯一性由 DB 唯一索引兜底）
+        projectMapper.insert(project);
 
         // 6. 写入 HOST 成员行
         ProjectMember host = new ProjectMember();
@@ -192,16 +183,10 @@ public class ProjectServiceImpl implements IProjectService {
             // 极端：主持人成员行已存在（一般不会）
             throw new ServiceException("主持人成员行写入冲突");
         }
-        return project;
-    }
 
-    /**
-     * 生成 KY-{yyyy}-{3位流水}。唯一索引冲突时调用方刷新 max 重试 1 次（§3.3）。
-     */
-    private String generateProjectNo(String year) {
-        Long maxSeq = projectMapper.selectMaxSeqByYear(year);
-        long next = (maxSeq == null ? 0L : maxSeq) + 1L;
-        return String.format("KY-%s-%03d", year, next);
+        // 7. 写入预算细分（与主表同事务；projectId 需等主表 insert 回填）
+        attachAndInsertSplits(project.getBudgetSplitList(), project.getProjectId(), operName);
+        return project;
     }
 
     // ========================================================
@@ -227,6 +212,16 @@ public class ProjectServiceImpl implements IProjectService {
         project.setProjectNo(db.getProjectNo());
         project.setLeaderId(db.getLeaderId());
         project.setStatus(db.getStatus());
+        // 预算细分全量替换（同事务）：删旧插新，预算总额 = Σ 各科目金额
+        // 请求体未带 budgetSplitList（null）则预算总额以库原值为准，忽略客户端传入值（保持 Σ 不变式）；传空列表表示清空
+        if (project.getBudgetSplitList() != null) {
+            BigDecimal budgetTotal = normalizeBudgetSplits(project.getBudgetSplitList());
+            project.setBudgetTotal(budgetTotal);
+            budgetSplitMapper.deleteByProjectId(project.getProjectId());
+            attachAndInsertSplits(project.getBudgetSplitList(), project.getProjectId(), operName);
+        } else {
+            project.setBudgetTotal(db.getBudgetTotal());
+        }
         if (project.getBudgetBalance() == null) {
             // 余额不通过此接口改（阶段4 维护）
             project.setBudgetBalance(db.getBudgetBalance());
@@ -499,6 +494,48 @@ public class ProjectServiceImpl implements IProjectService {
     // ========================================================
     //  私有工具
     // ========================================================
+
+    /**
+     * 校验并归整预算细分：金额 ≥ 0（null 视为 0），返回 Σ 各科目金额。
+     * 校验失败抛业务错误，整体回滚。
+     */
+    private BigDecimal normalizeBudgetSplits(List<BudgetSplit> splits) {
+        BigDecimal total = BigDecimal.ZERO;
+        if (splits == null) {
+            return total;
+        }
+        for (BudgetSplit split : splits) {
+            if (split == null) {
+                continue;
+            }
+            if (split.getBudgetAmount() != null && split.getBudgetAmount().compareTo(BigDecimal.ZERO) < 0) {
+                throw new ServiceException("预算科目金额不能为负数");
+            }
+            BigDecimal amt = split.getBudgetAmount() == null ? BigDecimal.ZERO : split.getBudgetAmount();
+            split.setBudgetAmount(amt);
+            total = total.add(amt);
+        }
+        return total;
+    }
+
+    /**
+     * 补全预算细分的 projectId / delFlag / createBy 后批量入库（新增与编辑全量替换共用）。
+     * 空列表直接跳过；行内 category 为空由 DB NOT NULL 约束兜底。
+     */
+    private void attachAndInsertSplits(List<BudgetSplit> splits, Long projectId, String operName) {
+        if (splits == null || splits.isEmpty()) {
+            return;
+        }
+        for (BudgetSplit split : splits) {
+            if (split == null) {
+                continue;
+            }
+            split.setProjectId(projectId);
+            split.setDelFlag("0");
+            split.setCreateBy(operName);
+        }
+        budgetSplitMapper.batchInsert(splits);
+    }
 
     /**
      * 当前登录用户是否「精确」为 researcher（数据范围 data_scope=5）。
