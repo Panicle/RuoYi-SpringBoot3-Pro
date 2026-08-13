@@ -1,11 +1,15 @@
 package com.ruoyi.biz.service.impl;
 
 import com.ruoyi.biz.domain.BudgetSplit;
+import com.ruoyi.biz.domain.CooperativeUnit;
 import com.ruoyi.biz.domain.Project;
 import com.ruoyi.biz.domain.ProjectMember;
+import com.ruoyi.biz.domain.ProjectUnit;
 import com.ruoyi.biz.mapper.BudgetSplitMapper;
+import com.ruoyi.biz.mapper.CooperativeUnitMapper;
 import com.ruoyi.biz.mapper.ProjectMapper;
 import com.ruoyi.biz.mapper.ProjectMemberMapper;
+import com.ruoyi.biz.mapper.ProjectUnitMapper;
 import com.ruoyi.biz.service.IProjectService;
 import com.ruoyi.common.core.domain.entity.SysRole;
 import com.ruoyi.common.exception.ServiceException;
@@ -66,6 +70,8 @@ public class ProjectServiceImpl implements IProjectService {
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final BudgetSplitMapper budgetSplitMapper;
+    private final ProjectUnitMapper projectUnitMapper;
+    private final CooperativeUnitMapper cooperativeUnitMapper;
     private final SysUserMapper sysUserMapper;
 
     // ========================================================
@@ -492,6 +498,79 @@ public class ProjectServiceImpl implements IProjectService {
     @Override
     public List<Project> exportProject(Project query) {
         return selectProjectList(query);
+    }
+
+    // ========================================================
+    //  合作单位关联（先过 scoped selectProjectById 闸门，现有模式）
+    // ========================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProjectUnit> selectProjectUnitList(Long projectId) {
+        if (projectId == null) {
+            throw new ServiceException("projectId 不能为空");
+        }
+        // 数据权限校验（项目级范围闸门，与成员端点一致）
+        selectProjectById(projectId);
+        return projectUnitMapper.selectProjectUnitList(projectId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int addProjectUnit(ProjectUnit projectUnit, String operName) {
+        if (projectUnit == null || projectUnit.getProjectId() == null || projectUnit.getUnitId() == null) {
+            throw new ServiceException("参数不完整");
+        }
+        // 数据权限校验（项目级范围闸门）
+        selectProjectById(projectUnit.getProjectId());
+        Project p = projectMapper.selectProjectById(projectUnit.getProjectId());
+        if (p == null) {
+            throw new ServiceException("课题不存在");
+        }
+        if (STATUS_ARCHIVED.equals(p.getStatus())) {
+            throw new ServiceException("已归档课题不可新增关联单位");
+        }
+        // 单位存在性校验（有效行）
+        CooperativeUnit unit = cooperativeUnitMapper.selectUnitById(projectUnit.getUnitId());
+        if (unit == null || !"0".equals(unit.getDelFlag())) {
+            throw new ServiceException("单位不存在或已删除");
+        }
+        // 同 project+unit 重复关联友好报错
+        ProjectUnit existing = projectUnitMapper.selectByProjectAndUnit(projectUnit.getProjectId(), projectUnit.getUnitId());
+        if (existing != null) {
+            throw new ServiceException("该单位已关联此课题");
+        }
+        if (StringUtils.isEmpty(projectUnit.getCooperationType())) {
+            projectUnit.setCooperationType(ROLE_PARTICIPANT);  // 复用成员默认角色 PARTICPANT 语义，字典 cooperation_type 默认参与
+        }
+        projectUnit.setDelFlag("0");  // 三层保险之一：Service 显式置
+        projectUnit.setCreateBy(operName);
+        return projectUnitMapper.insert(projectUnit);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int removeProjectUnits(Long[] ids, String operName) {
+        if (ids == null || ids.length == 0) {
+            return 0;
+        }
+        // 每个关联所属课题需通过数据权限
+        Set<Long> projectIds = new HashSet<>();
+        for (Long id : ids) {
+            Long pid = projectUnitMapper.selectProjectIdById(id);
+            if (pid == null) {
+                throw new ServiceException("关联[" + id + "]不存在或已删除");
+            }
+            projectIds.add(pid);
+        }
+        for (Long pid : projectIds) {
+            selectProjectById(pid);  // 数据权限校验
+            Project p = projectMapper.selectProjectById(pid);
+            if (p != null && STATUS_ARCHIVED.equals(p.getStatus())) {
+                throw new ServiceException("已归档课题不可删除关联单位");
+            }
+        }
+        return projectUnitMapper.softDeleteByIds(ids, operName);
     }
 
     // ========================================================

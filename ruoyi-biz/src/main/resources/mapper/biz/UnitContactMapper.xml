@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.UnitContactMapper">
+
+    <resultMap type="UnitContact" id="ContactResult">
+        <id     property="contactId"    column="contact_id"     />
+        <result property="unitId"       column="unit_id"        />
+        <result property="contactName"  column="contact_name"   />
+        <result property="position"     column="position"       />
+        <result property="phone"        column="phone"          />
+        <result property="email"        column="email"          />
+        <result property="major"        column="major"          />
+        <result property="researchField" column="research_field" />
+        <result property="isPrimary"    column="is_primary"     />
+        <result property="delFlag"      column="del_flag"       />
+        <result property="createBy"     column="create_by"      />
+        <result property="createTime"   column="create_time"    />
+        <result property="updateBy"     column="update_by"      />
+        <result property="updateTime"   column="update_time"    />
+        <result property="remark"       column="remark"         />
+    </resultMap>
+
+    <!-- 单位联系人列表（自定义 XML 显式声明 del_flag='0'；主联系人排前再按 contact_id） -->
+    <select id="selectContactList" parameterType="Long" resultMap="ContactResult">
+        select contact_id, unit_id, contact_name, position, phone, email,
+               major, research_field, is_primary, del_flag,
+               create_by, create_time, update_by, update_time, remark
+        from unit_contact
+        where unit_id = #{unitId} and del_flag = '0'
+        order by is_primary desc, contact_id
+    </select>
+
+    <!-- 批量逻辑删除 -->
+    <update id="softDeleteByIds">
+        update unit_contact
+        set del_flag    = '2',
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where contact_id in
+        <foreach collection="contactIds" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+          and del_flag = '0'
+    </update>
+
+</mapper>

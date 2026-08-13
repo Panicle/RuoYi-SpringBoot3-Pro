@@ -2,6 +2,7 @@ package com.ruoyi.biz.service;
 
 import com.ruoyi.biz.domain.Project;
 import com.ruoyi.biz.domain.ProjectMember;
+import com.ruoyi.biz.domain.ProjectUnit;
 
 import java.util.List;
 
@@ -72,4 +73,19 @@ public interface IProjectService {
      * Excel 导出（复用列表查询条件 + 数据范围）
      */
     List<Project> exportProject(Project query);
+
+    /**
+     * 课题关联单位列表（先过 scoped selectProjectById 闸门；返回含 unitName/externalUnitType）
+     */
+    List<ProjectUnit> selectProjectUnitList(Long projectId);
+
+    /**
+     * 新增课题关联单位（先过 scoped selectProjectById 闸门；同 project+unit 重复关联友好报错）
+     */
+    int addProjectUnit(ProjectUnit projectUnit, String operName);
+
+    /**
+     * 批量删除课题关联单位（每个关联所属课题需通过数据范围；逻辑删除）
+     */
+    int removeProjectUnits(Long[] ids, String operName);
 }

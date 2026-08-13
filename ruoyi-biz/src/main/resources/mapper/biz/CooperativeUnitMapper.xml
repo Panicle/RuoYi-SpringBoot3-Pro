@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.CooperativeUnitMapper">
+
+    <resultMap type="CooperativeUnit" id="CooperativeUnitResult">
+        <id     property="unitId"            column="unit_id"             />
+        <result property="parentId"          column="parent_id"           />
+        <result property="ancestors"         column="ancestors"           />
+        <result property="unitName"          column="unit_name"           />
+        <result property="unitType"          column="unit_type"           />
+        <result property="externalUnitType"  column="external_unit_type"  />
+        <result property="creditCode"        column="credit_code"         />
+        <result property="contactPerson"     column="contact_person"      />
+        <result property="contactPhone"      column="contact_phone"       />
+        <result property="address"           column="address"             />
+        <result property="companyType"       column="company_type"        />
+        <result property="companyCategory"   column="company_category"    />
+        <result property="expertise"         column="expertise"           />
+        <result property="orderNum"          column="order_num"           />
+        <result property="delFlag"           column="del_flag"            />
+        <result property="parentName"        column="parent_name"         />
+        <result property="createBy"          column="create_by"           />
+        <result property="createTime"        column="create_time"         />
+        <result property="updateBy"          column="update_by"           />
+        <result property="updateTime"        column="update_time"         />
+        <result property="remark"            column="remark"              />
+    </resultMap>
+
+    <sql id="selectUnitVo">
+        select u.unit_id, u.parent_id, u.ancestors, u.unit_name,
+               u.unit_type, u.external_unit_type, u.credit_code,
+               u.contact_person, u.contact_phone, u.address,
+               u.company_type, u.company_category, u.expertise, u.order_num,
+               u.del_flag, u.create_by, u.create_time, u.update_by, u.update_time, u.remark
+        from cooperative_unit u
+    </sql>
+
+    <!-- 平铺列表（树表用，前端 handleTree 组树；自定义 XML 显式声明 del_flag='0'） -->
+    <select id="selectUnitList" parameterType="CooperativeUnit" resultMap="CooperativeUnitResult">
+        <include refid="selectUnitVo"/>
+        <where>
+            u.del_flag = '0'
+            <if test="unitId != null and unitId != 0"> and u.unit_id = #{unitId} </if>
+            <if test="parentId != null and parentId != 0"> and u.parent_id = #{parentId} </if>
+            <if test="unitName != null and unitName != ''"> and u.unit_name like concat('%', #{unitName}, '%') </if>
+            <if test="unitType != null and unitType != ''"> and u.unit_type = #{unitType} </if>
+            <if test="externalUnitType != null and externalUnitType != ''"> and u.external_unit_type = #{externalUnitType} </if>
+        </where>
+        order by u.parent_id, u.order_num
+    </select>
+
+    <!-- 按 unitId 查询（含父单位名回显；不限定 del_flag，Service 侧校验存在性与删除态） -->
+    <select id="selectUnitById" parameterType="Long" resultMap="CooperativeUnitResult">
+        select u.unit_id, u.parent_id, u.ancestors, u.unit_name,
+               u.unit_type, u.external_unit_type, u.credit_code,
+               u.contact_person, u.contact_phone, u.address,
+               u.company_type, u.company_category, u.expertise, u.order_num,
+               u.del_flag, u.create_by, u.create_time, u.update_by, u.update_time, u.remark,
+               (select unit_name from cooperative_unit where unit_id = u.parent_id) parent_name
+        from cooperative_unit u
+        where u.unit_id = #{unitId}
+    </select>
+
+    <!-- 是否存在未删后代节点（find_in_set ancestors，跨任意层级；达梦兼容写法同 SysDeptMapper） -->
+    <select id="hasChildByUnitId" parameterType="Long" resultType="int">
+        select count(1)
+        from cooperative_unit
+        where del_flag = '0'
+        <choose>
+            <when test="'pgsql' == _databaseId || 'hg' == _databaseId">
+                and '${unitId}' = ANY (string_to_array(ancestors, ','))
+            </when>
+            <otherwise>
+                and find_in_set(#{unitId}, ancestors)
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- 查询全部后代（updateChildren 同步 ancestors 用；find_in_set 达梦兼容写法） -->
+    <select id="selectChildrenUnitById" parameterType="Long" resultMap="CooperativeUnitResult">
+        select * from cooperative_unit where del_flag = '0'
+        <choose>
+            <when test="'pgsql' == _databaseId || 'hg' == _databaseId">
+                and '${unitId}' = ANY (string_to_array(ancestors, ','))
+            </when>
+            <otherwise>
+                and find_in_set(#{unitId}, ancestors)
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- 批量同步后代 ancestors（case unit_id when ... then ...） -->
+    <update id="updateUnitChildren" parameterType="java.util.List">
+        update cooperative_unit set ancestors =
+        <foreach collection="units" item="item" index="index"
+                 separator=" " open="case unit_id" close="end">
+            when #{item.unitId} then #{item.ancestors}
+        </foreach>
+        where unit_id in
+        <foreach collection="units" item="item" index="index"
+                 separator="," open="(" close=")">
+            #{item.unitId}
+        </foreach>
+    </update>
+
+    <!-- 逻辑删除（显式置 del_flag='2'，三层保险之一；不依赖 @TableLogic 改写） -->
+    <update id="deleteUnitById">
+        update cooperative_unit
+        set del_flag    = '2',
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where unit_id = #{unitId}
+    </update>
+
+</mapper>
