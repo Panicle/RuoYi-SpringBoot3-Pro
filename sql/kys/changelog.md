@@ -18,6 +18,7 @@
 | 7 | V1.0.6__project_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-12 | ✅ 64/64语句成功（首次+幂等复查各一次）：表结构2列+唯一索引+字典1类型6项+菜单10项+角色菜单挂载39条；DB复查（project 17列/唯一索引/dict_id=221/菜单2010-2019/7角色挂载）全部 PASS |
 | 8 | V1.0.7__budget_breakdown.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 12/12语句成功（首次+幂等复查各一次）：字典 budget_category（dict_id=222 + dict_data 20097-20106 共10项）+ budget_split.category 注释更新；DB复查（dict_type=222/dict_data 10项顺序与值/注释）全部 PASS |
 | 9 | V1.0.8__project_category_specialty.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 19/19语句成功（首次+幂等复查各一次）：字典 project_category（dict_id=223 + dict_data 20107-20109 共3项）+ specialty（dict_id=224 + dict_data 20110-20118 共9项）+ project 加列 project_category/specialty（VARCHAR(20) 可空）+ member_role HOST 标签 主持人→组长；DB复查（两字典/两列/注释/HOST label）全部 PASS |
+| 10 | V1.0.9__cooperative_unit.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 62/62语句成功（首次+幂等复查各一次）：cooperative_unit 加 6 树形列（parent_id/ancestors/company_type/company_category/expertise/order_num，14列→20列）+ 索引 idx_cooperative_unit_parent_id + 新表 unit_contact（15列，IDENTITY主键/审计/逻辑删）+ 索引 idx_unit_contact_unit_id + 字典 company_type（dict_id=225，20119-20120）+ company_category（dict_id=226，20121-20126）+ 菜单 2020-2027/2029 共9项 + 角色挂载 29 条（§1.4 矩阵）；DB复查（6列/索引/unit_contact结构/两字典8条/菜单/角色挂载）全部 PASS |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
@@ -138,6 +139,7 @@
 | 7 | `V1.0.6__project_module.sql` | 阶段2课题管理基线：project 加 2 列 + 唯一索引 + project_type 字典 6 项 + 菜单 2010-2019 + 6 业务角色差异化挂载 |
 | 8 | `V1.0.7__budget_breakdown.sql` | 阶段2变更1预算细分基线：预算科目字典 budget_category（dict_id=222，dict_data 20097-20106 共10项）+ budget_split.category 注释更新 |
 | 9 | `V1.0.8__project_category_specialty.sql` | 阶段2变更2项目类别/专业分类基线：字典 project_category（dict_id=223，20107-20109 共3项）+ specialty（dict_id=224，20110-20118 共9项）+ project 加列 project_category/specialty + member_role HOST 改组长 |
+| 10 | `V1.0.9__cooperative_unit.sql` | 阶段6合作单位基线：cooperative_unit 加 6 树形列（parent_id/ancestors/company_type/company_category/expertise/order_num）+ 索引 + 新表 unit_contact（联系人=高校老师统一）+ company_type/company_category 两字典（8条）+ 菜单 2020-2027/2029（9项）+ 角色挂载 29 条 |
 
 ---
 
@@ -291,3 +293,67 @@
 - 阶段2变更2 Task 2：后端（Project 两字段 + insert 必填校验 + 删除课题级联逻辑删 project_member + update 可改）
 - 阶段2变更2 Task 3：前端（两字典下拉必填 + 列表/详情展示 + 文案 主持人→组长）
 - 阶段2变更2 Task 4：冒烟（新增不传两字段报错 / 删除含组长+成员课题成功 / 回归不退化）
+
+---
+
+## V1.0.9 — 阶段6 合作单位基线
+
+**日期**：2026-08-13
+
+**任务卡关联**：阶段6 合作单位 / Task 1：V1.0.9 SQL（树列/unit_contact 表/2字典/菜单 2020-2029/角色挂载）+ devdm 执行 + changelog
+
+**变更内容**：
+
+1. **cooperative_unit 表加 6 树形列**（V1.0.0 14 列 → V1.0.9 20 列，幂等 `ADD IF NOT EXISTS` + `COMMENT ON COLUMN`）
+   - `parent_id BIGINT DEFAULT 0`：父单位ID（0=顶级，照 sys_dept 模型；公司树≤3层/学校树≤2层）
+   - `ancestors VARCHAR(200) DEFAULT ''`：祖级链（逗号分隔，首尾空串，例：`,3,5,`）
+   - `company_type VARCHAR(20)`：公司类型（字典 company_type，公司用）
+   - `company_category VARCHAR(20)`：公司性质（字典 company_category，公司用）
+   - `expertise VARCHAR(500)`：擅长领域（公司/学校通用文本）
+   - `order_num INT DEFAULT 0`：树内排序
+   - 新索引 `idx_cooperative_unit_parent_id`（PL 块预检 `USER_INDEXES` 幂等创建）
+
+2. **新表 `unit_contact`**（公司联系人/高校老师统一建模，PL 块预检 `user_tables` 幂等建表）
+   - `contact_id BIGINT IDENTITY(1,1)` 主键 / `unit_id BIGINT NOT NULL` / `contact_name VARCHAR(50) NOT NULL` / `position VARCHAR(50)` / `phone VARCHAR(20)` / `email VARCHAR(100)` / `major VARCHAR(100)`（高校用）/ `research_field VARCHAR(200)`（高校用）/ `is_primary CHAR(1) DEFAULT '0'` / `del_flag CHAR(1) DEFAULT '0'` / 审计 4 字段 / `remark VARCHAR(500)`，共 15 列
+   - 新索引 `idx_unit_contact_unit_id`（PL 块内 `EXECUTE IMMEDIATE` 创建）
+
+3. **新增字典 `company_type`**（dict_id=225，dict_code 20119–20120，2 项，dict_value 大写）
+   - `MICRO` 小微企业（primary）/ `GENERAL` 一般纳税人（success）
+
+4. **新增字典 `company_category`**（dict_id=226，dict_code 20121–20126，6 项，dict_value 大写）
+   - `SOE` 国有企业 / `PRIVATE` 私营企业 / `JV` 合资企业 / `FOREIGN` 外资企业 / `INSTITUTION` 事业单位 / `OTHER` 其他
+
+5. **新增菜单 9 项**（sys_menu 2020–2029，跳 2028 预留）
+   - 2020 C 合作单位管理（parent=2010，path=unit，component=biz/unit/index，perms=biz:unit:list）
+   - 2021–2027 F 按钮：query / add / edit / remove / export / contact（联系人维护）/ treeselect（树选择器，不需单独权限，挂 admin/science_admin 供前端可见性）
+   - 2029 F 关联单位（parent=2011 课题管理，perms=biz:project:unit，课题详情页「合作单位」tab）
+
+6. **角色挂载（任务卡 §1.4 矩阵，共 29 条 `sys_role_menu`）**
+   - admin(1) / science_admin(101)：全部 9 项（2020–2027 + 2029）
+   - leader(100) / office(102) / labor_hr(103) / researcher(105)：只读 2 项（2020+2021）
+   - dept_leader(104)：3 项（2020+2021+2029）
+
+**幂等性设计**：
+- 列添加走 `ALTER TABLE ADD IF NOT EXISTS`（达梦支持，同 V1.0.6/V1.0.8）；`COMMENT ON COLUMN` 直接执行（重跑覆盖为同值，零副作用）
+- 索引 / 表走 PL 匿名块预检 `USER_INDEXES` / `USER_TABLES` 后再创建（达梦 `CREATE INDEX` / `CREATE TABLE` 无 `IF NOT EXISTS`）
+- 字典 / 菜单 / 角色菜单挂载走 `INSERT ... SELECT ... WHERE NOT EXISTS`
+- **首次执行 62/62 成功；二次重跑 62/62 全绿零副作用**
+
+**DB 复查**（`python .tmp/check_v109_after.py`，全部 PASS）：
+- cooperative_unit 含 6 新列（类型/注释对齐任务卡 §1.1），`IDX_COOPERATIVE_UNIT_PARENT_ID` 存在
+- `unit_contact` 表 15 列列序对齐任务卡 §1.2，`IDX_UNIT_CONTACT_UNIT_ID` 存在
+- `sys_dict_type` dict_id=225='公司类型'/company_type、226='公司性质'/company_category，status='0'
+- `sys_dict_data` 20119–20120（2 项）/ 20121–20126（6 项），dict_sort 顺序、dict_value 大写与任务卡 §1.3 一致
+- `sys_menu` 2020–2029 共 9 项（跳 2028），类型/父菜单/组件/权限/名称对齐任务卡 §1.4
+- `sys_role_menu` 7 角色挂载总数 = 29 条（§1.4 矩阵一致）
+
+**依赖**：
+- V1.0.0：`cooperative_unit` 表（14 列）、`project_unit` 表
+- V1.0.1：`sys_dict_type` / `sys_dict_data` 框架表、`unit_type`(216) / `external_unit_type`(217) / `cooperation_type`(206) 复用字典
+- V1.0.4：6 业务角色（100–105）
+- V1.0.6：菜单 2010（科研管理目录）/ 2011（课题管理）
+
+**后续任务**：
+- 阶段6 Task 2：后端（合作单位树 CRUD + 联系人子资源 + 课题关联子资源，照 SysDeptServiceImpl；`biz:project:unit` Service 先过 scoped selectProjectById 闸门）
+- 阶段6 Task 3：前端（树表页 views/biz/unit/index.vue + 联系人弹窗 contactDialog.vue + 课题详情「合作单位」tab）
+- 阶段6 Task 4：冒烟（任务卡 §六 8 项）+ 回归

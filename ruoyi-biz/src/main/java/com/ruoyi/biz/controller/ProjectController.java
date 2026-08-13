@@ -2,6 +2,7 @@ package com.ruoyi.biz.controller;
 
 import com.ruoyi.biz.domain.Project;
 import com.ruoyi.biz.domain.ProjectMember;
+import com.ruoyi.biz.domain.ProjectUnit;
 import com.ruoyi.biz.service.IProjectService;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.annotation.RepeatSubmit;
@@ -216,5 +217,41 @@ public class ProjectController extends BaseController {
         Long projectId = (pidObj instanceof Number) ? ((Number) pidObj).longValue() : Long.parseLong(pidObj.toString());
         Long newLeaderUserId = (newObj instanceof Number) ? ((Number) newObj).longValue() : Long.parseLong(newObj.toString());
         return toAjax(projectService.changeHost(projectId, newLeaderUserId, getUsername()));
+    }
+
+    // ========================================================
+    //  合作单位关联端点（先过 scoped selectProjectById 闸门）
+    // ========================================================
+
+    /**
+     * 查询课题关联单位列表（返回含 unitName/externalUnitType）
+     */
+    @PreAuthorize("@ss.hasPermi('biz:project:query')")
+    @GetMapping("/unit/list")
+    public AjaxResult unitList(Long projectId) {
+        return success(projectService.selectProjectUnitList(projectId));
+    }
+
+    /**
+     * 新增课题关联单位（body: projectId/unitId/cooperationType；重复关联友好报错）
+     */
+    @PreAuthorize("@ss.hasPermi('biz:project:unit')")
+    @Log(title = "课题关联单位", businessType = BusinessType.INSERT)
+    @PostMapping("/unit")
+    @RepeatSubmit(interval = 2000)
+    public AjaxResult addUnit(@RequestBody ProjectUnit projectUnit) {
+        projectUnit.setCreateBy(getUsername());
+        return toAjax(projectService.addProjectUnit(projectUnit, getUsername()));
+    }
+
+    /**
+     * 批量删除课题关联单位
+     */
+    @PreAuthorize("@ss.hasPermi('biz:project:unit')")
+    @Log(title = "课题关联单位", businessType = BusinessType.DELETE)
+    @DeleteMapping("/unit/{ids}")
+    @RepeatSubmit(interval = 2000)
+    public AjaxResult removeUnit(@PathVariable Long[] ids) {
+        return toAjax(projectService.removeProjectUnits(ids, getUsername()));
     }
 }
