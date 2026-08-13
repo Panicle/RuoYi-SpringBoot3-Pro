@@ -720,15 +720,16 @@ def case_46_admin_detail_witness(sess) -> Dict[str, Any]:
 
 
 def case_47_admin_list_witness(sess) -> Dict[str, Any]:
-    """admin 列表见证：§6.2 admin data_scope=1 应看到全部课题。实际被过滤到本人相关 → total=0。"""
+    """admin 列表见证：§6.2 admin data_scope=1 应看到全部未删课题（非本人相关也可见）。
+    断言阈值 = 未删课题数（A/B/C/E/F=5，D 在 case_37 已删）。"""
     r = http(sess, "GET", "/biz/project/list", params={"pageNum": 1, "pageSize": 100})
     b = safe_json(r)
     total = b.get("total") if isinstance(b, dict) else None
     rows = b.get("rows", []) if isinstance(b, dict) else []
-    ok = r.status_code == 200 and isinstance(b, dict) and b.get("code") == 200 and total >= 6
+    ok = r.status_code == 200 and isinstance(b, dict) and b.get("code") == 200 and total >= 5
     note = ""
     if not ok:
-        note = "【业务代码 Bug】同 isResearcher() 误判：admin 列表被加 leader_id=admin OR EXISTS(member=admin) 过滤 → 非本人课题不可见。"
+        note = "admin 列表未看到全部课题（应 data_scope=1 全量）。"
     return {"status_code": r.status_code, "total": total, "seen_ids": [x.get("projectId") for x in rows],
             "body": b, "raw": r.text[:400]}, ok, note
 
@@ -826,13 +827,25 @@ def case_43_res_write_forbidden(sess) -> Dict[str, Any]:
     return out, all_ok
 
 
-def case_44_res_export(sess) -> Dict[str, Any]:
-    """researcher 导出（§6.3 应本人可导出；role 未挂 2016 → 记录实际）。"""
+def case_44_res_export(sess) -> Tuple[Dict[str, Any], bool]:
+    """researcher 导出（§9.3 本人可导出）。修复后应返回 Excel 文件流（非 JSON）。"""
     r = http(sess, "POST", "/biz/project/export")
+    ct = r.headers.get("Content-Type", "")
     b = safe_json(r)
     c = b.get("code") if isinstance(b, dict) else None
-    ok = (r.status_code == 200 and c == 200) or c == 403  # 预期 200（本人导出），但挂载缺 2016 可能 403 —— 记为观察
-    return {"status_code": r.status_code, "code": c, "body": b, "raw": r.text[:400]}, ok
+    is_xlsx = r.content[:2] == b"PK"
+    if isinstance(b, dict) and c == 403:
+        ok = False
+        note = "researcher export 仍 403（role 105 应已挂 2016，仍无权限）"
+    elif r.status_code == 200 and c is None and len(r.content) > 0 and is_xlsx:
+        ok = True
+        note = "researcher 导出成功（返回 Excel 文件流）"
+    else:
+        ok = False
+        note = "researcher export 返回异常（既非文件流也非 403）"
+    return {"status_code": r.status_code, "code": c, "content_type": ct,
+            "content_length": len(r.content), "is_xlsx_magic": is_xlsx,
+            "body": b, "raw": r.text[:200]}, ok, note
 
 
 def case_50_cleanup() -> Tuple[Dict[str, Any], bool]:
@@ -938,8 +951,8 @@ def main() -> int:
     record("42_res_detail_forbidden", ok, {"url": f"/biz/project/{STATE['project_b_id']}"}, resp)
     resp, ok = case_43_res_write_forbidden(res_sess)
     record("43_res_write_forbidden", ok, {"url": "/biz/project (write ops)"}, resp)
-    resp, ok = case_44_res_export(res_sess)
-    record("44_res_export", ok, {"url": "/biz/project/export (researcher)"}, resp, "§9.3 期望 200 本人导出；role 挂载缺 2016 观察实际")
+    resp, ok, note44 = case_44_res_export(res_sess)
+    record("44_res_export", ok, {"url": "/biz/project/export (researcher)"}, resp, note44)
 
     # ---- 收尾 ----
     resp, ok = case_50_cleanup()
