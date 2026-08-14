@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.ContractMapper">
+
+    <resultMap type="Contract" id="ContractResult">
+        <id     property="contractId"     column="contract_id"     />
+        <result property="projectId"      column="project_id"      />
+        <result property="contractName"   column="contract_name"   />
+        <result property="contractType"   column="contract_type"   />
+        <result property="amount"         column="amount"          />
+        <result property="signDate"       column="sign_date"       />
+        <result property="expireDate"     column="expire_date"     />
+        <result property="status"         column="status"          />
+        <result property="delFlag"        column="del_flag"        />
+        <result property="contractNo"     column="contract_no"     />
+        <result property="partyUnitId"    column="party_unit_id"   />
+        <result property="partyName"      column="party_name"      />
+        <result property="startDate"      column="start_date"      />
+        <result property="fileUrl"        column="file_url"        />
+        <result property="createBy"       column="create_by"       />
+        <result property="createTime"     column="create_time"     />
+        <result property="updateBy"       column="update_by"       />
+        <result property="updateTime"     column="update_time"     />
+        <result property="remark"         column="remark"          />
+        <result property="projectNo"      column="project_no"      />
+        <result property="projectName"    column="project_name"    />
+        <result property="partyUnitName"  column="party_unit_name" />
+    </resultMap>
+
+    <sql id="selectContractVo">
+        select c.contract_id, c.project_id, c.contract_name, c.contract_type,
+               c.amount, c.sign_date, c.expire_date, c.status, c.del_flag,
+               c.contract_no, c.party_unit_id, c.party_name, c.start_date, c.file_url,
+               c.create_by, c.create_time, c.update_by, c.update_time, c.remark,
+               p.project_no, p.project_name,
+               u.unit_name as party_unit_name
+        from contract c
+        join project p          on c.project_id   = p.project_id
+        left join cooperative_unit u on c.party_unit_id = u.unit_id
+    </sql>
+
+    <!-- 列表：走 @DataScope 通道（deptAlias=d, userAlias=u），researcher 不调用此方法 -->
+    <select id="selectContractList" parameterType="Contract" resultMap="ContractResult">
+        <include refid="selectContractVo"/>
+        <where>
+            c.del_flag = '0' and p.del_flag = '0'
+            <if test="contractName != null and contractName != ''"> and c.contract_name like concat(concat('%', #{contractName}), '%') </if>
+            <if test="contractNo != null and contractNo != ''"> and c.contract_no = #{contractNo} </if>
+            <if test="contractType != null and contractType != ''"> and c.contract_type = #{contractType} </if>
+            <if test="status != null and status != ''"> and c.status = #{status} </if>
+            <if test="projectId != null"> and c.project_id = #{projectId} </if>
+            <!-- 数据范围过滤（@DataScope 注入 params.dataScope） -->
+            ${params.dataScope}
+        </where>
+        order by c.contract_id desc
+    </select>
+
+    <!-- researcher 列表（本人相关）：所属课题 leader_id = me OR 课题成员含 me -->
+    <select id="selectContractListForResearcher" parameterType="Contract" resultMap="ContractResult">
+        <include refid="selectContractVo"/>
+        <where>
+            c.del_flag = '0' and p.del_flag = '0'
+            <if test="contractName != null and contractName != ''"> and c.contract_name like concat(concat('%', #{contractName}), '%') </if>
+            <if test="contractNo != null and contractNo != ''"> and c.contract_no = #{contractNo} </if>
+            <if test="contractType != null and contractType != ''"> and c.contract_type = #{contractType} </if>
+            <if test="status != null and status != ''"> and c.status = #{status} </if>
+            <if test="projectId != null"> and c.project_id = #{projectId} </if>
+            and (
+                p.leader_id = #{params.selfUserId}
+                or exists (
+                    select 1 from project_member m
+                     where m.project_id = p.project_id
+                       and m.user_id    = #{params.selfUserId}
+                       and m.del_flag   = '0'
+                )
+            )
+        </where>
+        order by c.contract_id desc
+    </select>
+
+    <!-- 详情：JOIN project 带名称 + LEFT JOIN cooperative_unit 带对方主体名（不带数据范围，Service 走闸门） -->
+    <select id="selectContractById" parameterType="Long" resultMap="ContractResult">
+        <include refid="selectContractVo"/>
+        where c.del_flag = '0' and c.contract_id = #{contractId}
+    </select>
+
+    <!-- 按合同编号查重（含软删行，与 DB 唯一索引 idx_contract_no_uk 兜底一致；唯一索引下至多 1 行） -->
+    <select id="selectByContractNo" resultType="java.lang.Long">
+        select contract_id
+          from contract
+         where contract_no = #{contractNo}
+    </select>
+</mapper>

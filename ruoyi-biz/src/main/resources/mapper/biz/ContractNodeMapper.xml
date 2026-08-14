@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.ContractNodeMapper">
+
+    <resultMap type="ContractNode" id="NodeResult">
+        <id     property="nodeId"      column="node_id"      />
+        <result property="contractId"  column="contract_id"  />
+        <result property="nodeName"    column="node_name"    />
+        <result property="nodeType"    column="node_type"    />
+        <result property="planDate"    column="plan_date"    />
+        <result property="actualDate"  column="actual_date"  />
+        <result property="status"      column="status"       />
+        <result property="delFlag"     column="del_flag"     />
+        <result property="voucherUrl"  column="voucher_url"  />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"  column="create_time"  />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"  column="update_time"  />
+        <result property="remark"      column="remark"       />
+        <result property="overdue"     column="overdue"      />
+    </resultMap>
+
+    <!-- 节点列表：包含 overdue 计算列（达梦 Oracle 兼容模式：TRUNC(SYSDATE) 取日期部分与 plan_date DATE 列比较；
+         sysdate 直接用会包含时分秒导致当天节点被误判过期；TRUNC 是达梦/Oracle 标准函数） -->
+    <select id="selectNodeList" parameterType="Long" resultMap="NodeResult">
+        select node_id, contract_id, node_name, node_type,
+               plan_date, actual_date, status, del_flag, voucher_url,
+               create_by, create_time, update_by, update_time, remark,
+               case when status = 'PENDING' and plan_date <![CDATA[ < ]]> trunc(sysdate) then 1 else 0 end as overdue
+          from contract_node
+         where del_flag = '0' and contract_id = #{contractId}
+         order by plan_date, node_id
+    </select>
+
+    <!-- 按合同逻辑删除全部有效节点（删除合同级联） -->
+    <update id="softDeleteByContractId">
+        update contract_node
+           set del_flag    = '2',
+               update_by   = #{operName},
+               update_time = sysdate
+         where contract_id = #{contractId}
+           and del_flag    = '0'
+    </update>
+
+    <!-- 批量逻辑删除 -->
+    <update id="softDeleteByIds">
+        update contract_node
+           set del_flag    = '2',
+               update_by   = #{operName},
+               update_time = sysdate
+         where node_id in
+            <foreach collection="nodeIds" item="id" open="(" close=")" separator=",">
+                #{id}
+            </foreach>
+           and del_flag = '0'
+    </update>
+
+    <!-- 完成动作：仅对非 DONE 节点生效（Service 层先 SELECT 校验 status != 'DONE'），del_flag='0' 兜底 -->
+    <update id="finishNode">
+        update contract_node
+           set status      = 'DONE',
+               actual_date = #{actualDate},
+               voucher_url = #{voucherUrl},
+               update_by   = #{operName},
+               update_time = sysdate
+         where node_id   = #{nodeId}
+           and status   != 'DONE'
+           and del_flag  = '0'
+    </update>
+</mapper>
