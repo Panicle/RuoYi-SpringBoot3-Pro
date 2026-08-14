@@ -91,7 +91,6 @@ public class ContractController extends BaseController {
     @PutMapping
     @RepeatSubmit(interval = 2000)
     public AjaxResult edit(@RequestBody Contract contract) {
-        contract.setUpdateBy(getUsername());
         return toAjax(contractService.updateContract(contract, getUsername()));
     }
 
@@ -152,7 +151,6 @@ public class ContractController extends BaseController {
     @PutMapping("/node")
     @RepeatSubmit(interval = 2000)
     public AjaxResult editNode(@RequestBody ContractNode node) {
-        node.setUpdateBy(getUsername());
         return toAjax(contractService.updateNode(node, getUsername()));
     }
 
@@ -170,7 +168,12 @@ public class ContractController extends BaseController {
         if (nidObj == null || dateObj == null) {
             return error("参数不完整");
         }
-        Long nodeId = (nidObj instanceof Number) ? ((Number) nidObj).longValue() : Long.parseLong(nidObj.toString());
+        Long nodeId;
+        try {
+            nodeId = (nidObj instanceof Number) ? ((Number) nidObj).longValue() : Long.parseLong(nidObj.toString());
+        } catch (NumberFormatException e) {
+            return error("nodeId 格式错误");
+        }
         Date actualDate = parseDate(dateObj);
         if (actualDate == null) {
             return error("实际日期格式错误");

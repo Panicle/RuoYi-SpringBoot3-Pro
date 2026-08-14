@@ -355,20 +355,32 @@ public class ContractServiceImpl implements IContractService {
 
     /**
      * 当前登录用户是否「精确」为 researcher（数据范围 data_scope=5）。
-     * 照抄 ProjectServiceImpl 现有实现：admin 短路、仅 researcher 角色走本人相关。
+     * 不能用 SecurityUtils.hasRole("researcher")：RuoYi 的 SUPER_ADMIN 捷径会让含 admin
+     * 角色 key 的用户恒 true，导致 admin 被误路由到 researcher「本人相关」分支。
+     * 精确策略：先判 admin 短路，再遍历角色列表逐条比对 role_key。
+     * 照抄 ProjectServiceImpl.java:672-696 现有实现风格。
      */
     private boolean isResearcher() {
         try {
-            com.ruoyi.common.core.domain.entity.SysRole role =
-                    SecurityUtils.getLoginUser().getUser().getRoles().stream()
-                            .filter(r -> r != null && "researcher".equals(r.getRoleKey()))
-                            .findFirst().orElse(null);
-            if (role == null) {
+            List<com.ruoyi.common.core.domain.entity.SysRole> roles = SecurityUtils.getLoginUser().getUser().getRoles();
+            if (roles == null || roles.isEmpty()) {
                 return false;
             }
-            boolean hasAdmin = SecurityUtils.getLoginUser().getUser().getRoles().stream()
-                    .anyMatch(r -> r != null && "admin".equals(r.getRoleKey()));
-            return !hasAdmin;
+            boolean hasAdmin = false;
+            boolean hasResearcher = false;
+            for (com.ruoyi.common.core.domain.entity.SysRole r : roles) {
+                if (r == null || StringUtils.isEmpty(r.getRoleKey())) {
+                    continue;
+                }
+                if ("admin".equals(r.getRoleKey())) {
+                    hasAdmin = true;
+                }
+                if ("researcher".equals(r.getRoleKey())) {
+                    hasResearcher = true;
+                }
+            }
+            // 含 admin 一律走全量分支；仅含 researcher 才走本人相关
+            return hasResearcher && !hasAdmin;
         } catch (Exception e) {
             return false;
         }
