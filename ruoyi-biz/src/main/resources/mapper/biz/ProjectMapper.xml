@@ -109,6 +109,16 @@
           and del_flag   = '0'
     </update>
 
+    <!-- 更新预算汇总两列（D3：由 budget_split 事务内派生；预算调整/记账共用） -->
+    <update id="updateBudgetSummary">
+        update project
+        set budget_total   = #{budgetTotal},
+            budget_balance = #{budgetBalance},
+            update_time    = sysdate
+        where project_id = #{projectId}
+          and del_flag   = '0'
+    </update>
+
     <!-- 按课题编号查重（含软删行，与 DB 唯一索引 idx_project_no_uk 兜底一致；唯一索引下至多 1 行） -->
     <select id="selectByProjectNo" resultType="java.lang.Long">
         select project_id
