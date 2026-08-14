@@ -7,6 +7,7 @@ import com.ruoyi.biz.domain.ProjectMember;
 import com.ruoyi.biz.domain.ProjectUnit;
 import com.ruoyi.biz.mapper.BudgetSplitMapper;
 import com.ruoyi.biz.mapper.CooperativeUnitMapper;
+import com.ruoyi.biz.mapper.ExpenseMapper;
 import com.ruoyi.biz.mapper.ProjectMapper;
 import com.ruoyi.biz.mapper.ProjectMemberMapper;
 import com.ruoyi.biz.mapper.ProjectUnitMapper;
@@ -70,6 +71,7 @@ public class ProjectServiceImpl implements IProjectService {
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final BudgetSplitMapper budgetSplitMapper;
+    private final ExpenseMapper expenseMapper;
     private final ProjectUnitMapper projectUnitMapper;
     private final CooperativeUnitMapper cooperativeUnitMapper;
     private final SysUserMapper sysUserMapper;
@@ -270,8 +272,9 @@ public class ProjectServiceImpl implements IProjectService {
             // 级联逻辑删除全部有效成员（含组长），与课题删除同事务
             projectMemberMapper.softDeleteByProjectId(pid, operName);
             // 级联逻辑删除全部有效预算细分（任务卡 §九：删课题不级联 budget_split 挂账，本期落地）；
-            // 经费流水 expense 的级联在记账侧任务补齐（ExpenseMapper 尚未建）
+            // 经费流水 expense 的级联同事务一并落地（C-1 收口）
             budgetSplitMapper.softDeleteByProjectId(pid, operName);
+            expenseMapper.softDeleteByProjectId(pid, operName);
         }
         // BaseMapper.deleteByIds 走 @TableLogic 自动改写 del_flag='2'
         return projectMapper.deleteByIds(Arrays.asList(projectIds));
