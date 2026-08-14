@@ -19,6 +19,7 @@
 | 8 | V1.0.7__budget_breakdown.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 12/12语句成功（首次+幂等复查各一次）：字典 budget_category（dict_id=222 + dict_data 20097-20106 共10项）+ budget_split.category 注释更新；DB复查（dict_type=222/dict_data 10项顺序与值/注释）全部 PASS |
 | 9 | V1.0.8__project_category_specialty.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 19/19语句成功（首次+幂等复查各一次）：字典 project_category（dict_id=223 + dict_data 20107-20109 共3项）+ specialty（dict_id=224 + dict_data 20110-20118 共9项）+ project 加列 project_category/specialty（VARCHAR(20) 可空）+ member_role HOST 标签 主持人→组长；DB复查（两字典/两列/注释/HOST label）全部 PASS |
 | 10 | V1.0.9__cooperative_unit.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 62/62语句成功（首次+幂等复查各一次）：cooperative_unit 加 6 树形列（parent_id/ancestors/company_type/company_category/expertise/order_num，14列→20列）+ 索引 idx_cooperative_unit_parent_id + 新表 unit_contact（15列，IDENTITY主键/审计/逻辑删）+ 索引 idx_unit_contact_unit_id + 字典 company_type（dict_id=225，20119-20120）+ company_category（dict_id=226，20121-20126）+ 菜单 2020-2027/2029 共9项 + 角色挂载 29 条（§1.4 矩阵）；DB复查（6列/索引/unit_contact结构/两字典8条/菜单/角色挂载）全部 PASS |
+| 11 | V1.0.10__contract_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-14 | ✅ 58/58语句成功（首次+幂等复查各一次）：contract 加 5 列（contract_no/party_unit_id/party_name/start_date/file_url，14列→19列）+ 索引 idx_contract_no_uk（UNIQUE on contract_no，照 project_no 模式含软删行）+ 索引 idx_contract_party_unit_id + contract_node 加 1 列 voucher_url（13列→14列）+ 字典 contract_status（dict_id=227，20127-20129 ACTIVE/EXPIRED/TERMINATED）+ node_status（dict_id=228，20130-20132 PENDING/DONE/OVERDUE）+ 菜单 2030-2036 共 7 项（2030 C 合同管理 parent=2010 + 6 F 按钮）+ 角色挂载 29 条（§1.4 矩阵）；DB复查（contract 19列/5列注释/UNIQUE索引/普通索引/contract_node voucher_url/两字典6条/菜单7项属性/7角色挂载29条）全部 PASS |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
@@ -140,6 +141,7 @@
 | 8 | `V1.0.7__budget_breakdown.sql` | 阶段2变更1预算细分基线：预算科目字典 budget_category（dict_id=222，dict_data 20097-20106 共10项）+ budget_split.category 注释更新 |
 | 9 | `V1.0.8__project_category_specialty.sql` | 阶段2变更2项目类别/专业分类基线：字典 project_category（dict_id=223，20107-20109 共3项）+ specialty（dict_id=224，20110-20118 共9项）+ project 加列 project_category/specialty + member_role HOST 改组长 |
 | 10 | `V1.0.9__cooperative_unit.sql` | 阶段6合作单位基线：cooperative_unit 加 6 树形列（parent_id/ancestors/company_type/company_category/expertise/order_num）+ 索引 + 新表 unit_contact（联系人=高校老师统一）+ company_type/company_category 两字典（8条）+ 菜单 2020-2027/2029（9项）+ 角色挂载 29 条 |
+| 11 | `V1.0.10__contract_module.sql` | 阶段3合同管理基线：contract 加 5 列（contract_no/party_unit_id/party_name/start_date/file_url）+ 索引 idx_contract_no_uk（UNIQUE，含软删行）+ 索引 idx_contract_party_unit_id + contract_node 加 1 列 voucher_url + 字典 contract_status（dict_id=227，3项）+ node_status（dict_id=228，3项，OVERDUE 阶段9 预留）+ 菜单 2030-2036（7项）+ 角色挂载 29 条 |
 
 ---
 
@@ -357,3 +359,79 @@
 - 阶段6 Task 2：后端（合作单位树 CRUD + 联系人子资源 + 课题关联子资源，照 SysDeptServiceImpl；`biz:project:unit` Service 先过 scoped selectProjectById 闸门）
 - 阶段6 Task 3：前端（树表页 views/biz/unit/index.vue + 联系人弹窗 contactDialog.vue + 课题详情「合作单位」tab）
 - 阶段6 Task 4：冒烟（任务卡 §六 8 项）+ 回归
+
+---
+
+## V1.0.10 — 阶段3 合同管理基线
+
+**日期**：2026-08-14
+
+**任务卡关联**：阶段3 合同管理 / Task 1：V1.0.10 SQL（5 列 + 2 索引 + 1 列 + 2 字典 + 7 菜单 + 29 角色挂载）+ devdm 执行 + changelog
+
+**变更内容**：
+
+1. **contract 表加 5 列**（V1.0.0 14 列 → V1.0.10 19 列，幂等 `ADD IF NOT EXISTS` + `COMMENT ON COLUMN`）
+   - `contract_no VARCHAR(50)`：合同编号（人工输入必填；唯一索引 idx_contract_no_uk 兜底，含软删行，照 project_no 模式）
+   - `party_unit_id BIGINT`：对方主体（cooperative_unit.unit_id，可空）
+   - `party_name VARCHAR(200)`：对方名称（选单位时=单位名快照；未建档时手工填，仅展示冗余，非主数据）
+   - `start_date DATE`：生效日期
+   - `file_url VARCHAR(500)`：合同附件（/common/upload 相对路径）
+   - 新索引 `idx_contract_no_uk`（UNIQUE on contract_no，PL 块预检 `USER_INDEXES` 幂等创建，照 V1.0.6 idx_project_no_uk 写法）
+   - 新索引 `idx_contract_party_unit_id`（普通 on party_unit_id，PL 块预检幂等创建）
+
+2. **contract_node 表加 1 列**（V1.0.0 13 列 → V1.0.10 14 列）
+   - `voucher_url VARCHAR(500)`：完成凭证（验收单/发票，/common/upload 相对路径）
+   - 完成日期复用现有 `actual_date`（总纲写 finish_date，语义等价，不加列不迁移——任务卡备案）
+
+3. **新增字典 `contract_status`**（dict_id=227，dict_code 20127–20129，3 项，dict_value 大写）
+   - `ACTIVE` 履行中（primary）
+   - `EXPIRED` 已到期（warning；阶段9 定时任务写入）
+   - `TERMINATED` 已终止（danger）
+
+4. **新增字典 `node_status`**（dict_id=228，dict_code 20130–20132，3 项，dict_value 大写）
+   - `PENDING` 待执行（info）
+   - `DONE` 已完成（success）
+   - `OVERDUE` 已逾期（danger；阶段9 定时任务写入，本期预留字典项）
+
+5. **新增菜单 7 项**（sys_menu 2030–2036，挂在 2010 科研管理下）
+   - 2030 C 合同管理（path=contract，component=biz/contract/index，perms=biz:contract:list，icon=documentation）
+   - 2031 F 查询（biz:contract:query）
+   - 2032 F 新增（biz:contract:add）
+   - 2033 F 修改（biz:contract:edit）
+   - 2034 F 删除（biz:contract:remove）
+   - 2035 F 导出（biz:contract:export）
+   - 2036 F 节点维护（biz:contract:node，节点 CRUD + 完成动作）
+
+6. **角色挂载（任务卡 §1.4 矩阵，共 29 条 `sys_role_menu`）**
+   - admin(1) / science_admin(101)：全部 7 项（2030–2036）
+   - leader(100) / office(102) / labor_hr(103)：只读 2 项（2030+2031）
+   - dept_leader(104)：6 项（2030/2031/2032/2033/2035/2036，无 remove）
+   - researcher(105)：3 项（2030/2031/2035）
+
+**幂等性设计**：
+- 列添加走 `ALTER TABLE ADD IF NOT EXISTS`（达梦支持，同 V1.0.6/V1.0.8/V1.0.9）；`COMMENT ON COLUMN` 直接执行（重跑覆盖为同值，零副作用）
+- 唯一/普通索引走 PL 匿名块预检 `USER_INDEXES` 后再 `CREATE [UNIQUE] INDEX`（达梦 `CREATE INDEX` 无 `IF NOT EXISTS`，照 V1.0.6 idx_project_no_uk 写法）
+- 字典 / 菜单 / 角色菜单挂载走 `INSERT ... SELECT ... WHERE NOT EXISTS`
+- **首次执行 58/58 成功；二次重跑 58/58 全绿零副作用**
+
+**DB 复查**（`python .tmp/check_v1010_after.py`，全部 PASS）：
+- contract 表现有 19 列（14 原 + 5 新），5 列注释对齐任务卡 §1.1
+- `IDX_CONTRACT_NO_UK` 存在且 UNIQUE on CONTRACT_NO；`IDX_CONTRACT_PARTY_UNIT_ID` 存在，列 = PARTY_UNIT_ID
+- `contract_node` 含 `VOUCHER_URL` 列（VARCHAR(500)），总列数 14
+- `sys_dict_type` dict_id=227='合同状态'/contract_status、228='节点状态'/node_status，status='0'
+- `sys_dict_data` 20127–20129（3 项，ACTIVE/EXPIRED/TERMINATED 大写，list_class primary/warning/danger）/ 20130–20132（3 项，PENDING/DONE/OVERDUE 大写，list_class info/success/danger）
+- `sys_menu` 2030–2036 共 7 项，类型/父菜单/组件/权限/名称全部对齐任务卡 §1.4
+- `sys_role_menu` 7 角色挂载总数 = 29 条（§1.4 矩阵一致：7+7+2+2+2+6+3）
+
+**依赖**：
+- V1.0.0：`contract` / `contract_node` 表（14 列 + 13 列）
+- V1.0.1：`sys_dict_type` / `sys_dict_data` 框架表；`contract_type`(203) / `node_type`(204) 复用字典
+- V1.0.4：6 业务角色（100–105）
+- V1.0.6：菜单 2010（科研管理目录）/ 2011（课题管理）
+- V1.0.9：`cooperative_unit` 表（20 列，含 unit_id 供 party_unit_id 关联）
+
+**后续任务**：
+- 阶段3 Task 2：后端（Contract/ContractNode Domain + Controller + 数据权限照 Project 模式 + 节点完成动作 + party 二选一校验 + contract_no 查重）
+- 阶段3 Task 3：前端（index.vue + nodeDialog.vue + api；字典 useDict 四类；按钮 v-hasPermi 对齐 §1.4；前端分支 feature/biz-contract-ui）
+- 阶段3 Task 4：冒烟（任务卡 §六 8 项：新增合同/party 二选一/节点 CRUD/完成动作/逾期标志/researcher 数据权限/级联逻辑删/回归）
+
