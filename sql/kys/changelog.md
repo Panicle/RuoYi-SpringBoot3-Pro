@@ -20,6 +20,7 @@
 | 9 | V1.0.8__project_category_specialty.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 19/19语句成功（首次+幂等复查各一次）：字典 project_category（dict_id=223 + dict_data 20107-20109 共3项）+ specialty（dict_id=224 + dict_data 20110-20118 共9项）+ project 加列 project_category/specialty（VARCHAR(20) 可空）+ member_role HOST 标签 主持人→组长；DB复查（两字典/两列/注释/HOST label）全部 PASS |
 | 10 | V1.0.9__cooperative_unit.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 62/62语句成功（首次+幂等复查各一次）：cooperative_unit 加 6 树形列（parent_id/ancestors/company_type/company_category/expertise/order_num，14列→20列）+ 索引 idx_cooperative_unit_parent_id + 新表 unit_contact（15列，IDENTITY主键/审计/逻辑删）+ 索引 idx_unit_contact_unit_id + 字典 company_type（dict_id=225，20119-20120）+ company_category（dict_id=226，20121-20126）+ 菜单 2020-2027/2029 共9项 + 角色挂载 29 条（§1.4 矩阵）；DB复查（6列/索引/unit_contact结构/两字典8条/菜单/角色挂载）全部 PASS |
 | 11 | V1.0.10__contract_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-14 | ✅ 58/58语句成功（首次+幂等复查各一次）：contract 加 5 列（contract_no/party_unit_id/party_name/start_date/file_url，14列→19列）+ 索引 idx_contract_no_uk（UNIQUE on contract_no，照 project_no 模式含软删行）+ 索引 idx_contract_party_unit_id + contract_node 加 1 列 voucher_url（13列→14列）+ 字典 contract_status（dict_id=227，20127-20129 ACTIVE/EXPIRED/TERMINATED）+ node_status（dict_id=228，20130-20132 PENDING/DONE/OVERDUE）+ 菜单 2030-2036 共 7 项（2030 C 合同管理 parent=2010 + 6 F 按钮）+ 角色挂载 29 条（§1.4 矩阵）；DB复查（contract 19列/5列注释/UNIQUE索引/普通索引/contract_node voucher_url/两字典6条/菜单7项属性/7角色挂载29条）全部 PASS |
+| 12 | V1.0.11__expense_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-14 | ✅ 59/59语句成功（首次+幂等复查各一次）：budget_split 加 3 列（used_amount/balance/version，10列→13列）+ 存量初始化 UPDATE + 唯一索引 idx_budget_split_pc_uk（project_id,category,del_flag，PL块预检重复行→本次0条重复正常建索引）+ expense 加 4 列（split_id/status/voucher_url/version，13列→17列）+ 存量初始化 UPDATE + 索引 idx_expense_split_id + 字典 expense_status（dict_id=229，20133-20134 NORMAL/VOID）+ sys_config biz.expense.allowOverdraft=false（config_id 动态 MAX+1=7）+ 菜单 2040-2046 共 7 项（2040 C 经费管理 parent=2010 + 6 F 按钮）+ 角色挂载 30 条（任务卡正文写 31，按§2.5矩阵逐项实算为 30，矩阵优先于总数）；DB复查（budget_split 13列/唯一索引UNIQUE/expense 17列/普通索引/两存量初始化无NULL/字典2条/sys_config值false/菜单7项属性/7角色挂载30条）全部 PASS |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
@@ -142,6 +143,7 @@
 | 9 | `V1.0.8__project_category_specialty.sql` | 阶段2变更2项目类别/专业分类基线：字典 project_category（dict_id=223，20107-20109 共3项）+ specialty（dict_id=224，20110-20118 共9项）+ project 加列 project_category/specialty + member_role HOST 改组长 |
 | 10 | `V1.0.9__cooperative_unit.sql` | 阶段6合作单位基线：cooperative_unit 加 6 树形列（parent_id/ancestors/company_type/company_category/expertise/order_num）+ 索引 + 新表 unit_contact（联系人=高校老师统一）+ company_type/company_category 两字典（8条）+ 菜单 2020-2027/2029（9项）+ 角色挂载 29 条 |
 | 11 | `V1.0.10__contract_module.sql` | 阶段3合同管理基线：contract 加 5 列（contract_no/party_unit_id/party_name/start_date/file_url）+ 索引 idx_contract_no_uk（UNIQUE，含软删行）+ 索引 idx_contract_party_unit_id + contract_node 加 1 列 voucher_url + 字典 contract_status（dict_id=227，3项）+ node_status（dict_id=228，3项，OVERDUE 阶段9 预留）+ 菜单 2030-2036（7项）+ 角色挂载 29 条 |
+| 12 | `V1.0.11__expense_module.sql` | 阶段4经费管理基线：budget_split 加 3 列（used_amount/balance/version）+ 存量初始化 + 唯一索引 idx_budget_split_pc_uk（project_id,category,del_flag，建前查重复行）+ expense 加 4 列（split_id/status/voucher_url/version）+ 存量初始化 + 索引 idx_expense_split_id + 字典 expense_status（dict_id=229，2项）+ sys_config biz.expense.allowOverdraft=false + 菜单 2040-2046（7项）+ 角色挂载 30 条 |
 
 ---
 
@@ -434,4 +436,88 @@
 - 阶段3 Task 2：后端（Contract/ContractNode Domain + Controller + 数据权限照 Project 模式 + 节点完成动作 + party 二选一校验 + contract_no 查重）
 - 阶段3 Task 3：前端（index.vue + nodeDialog.vue + api；字典 useDict 四类；按钮 v-hasPermi 对齐 §1.4；前端分支 feature/biz-contract-ui）
 - 阶段3 Task 4：冒烟（任务卡 §六 8 项：新增合同/party 二选一/节点 CRUD/完成动作/逾期标志/researcher 数据权限/级联逻辑删/回归）
+
+---
+
+## V1.0.11 — 阶段4 经费管理基线
+
+**日期**：2026-08-14
+
+**任务卡关联**：阶段4 经费管理 / Task 1：V1.0.11 SQL（两表加列 + 唯一索引 + 字典 + sys_config + 菜单 2040-2046 + 角色挂载）+ devdm 幂等执行 + changelog
+
+**变更内容**：
+
+1. **budget_split 表加 3 列**（V1.0.0 10 列 → V1.0.11 13 列，幂等 `ADD IF NOT EXISTS` + `COMMENT ON COLUMN`）
+   - `used_amount DECIMAL(14,2) DEFAULT 0.00`：已用金额缓存 = Σ 有效 expense.amount（事务内重算写回）
+   - `balance DECIMAL(14,2) DEFAULT 0.00`：余额缓存 = budget_amount - used_amount
+   - `version INT DEFAULT 0`：乐观锁（MyBatis-Plus `@Version`）
+   - 存量数据初始化：`UPDATE budget_split SET used_amount=0, balance=budget_amount, version=0 WHERE used_amount IS NULL`（幂等）
+   - 新索引 `idx_budget_split_pc_uk`（UNIQUE on project_id, category, del_flag；PL 块预检 `USER_INDEXES` + 建索引前先查重复行，若存在重复行 `RAISE_APPLICATION_ERROR` 中止；本次执行前勘查 devdm 现有数据 0 条重复，正常建索引通过）
+
+2. **expense 表加 4 列**（V1.0.0 13 列 → V1.0.11 17 列）
+   - `split_id BIGINT`：关联预算分劈行（budget_split.split_id；NOT NULL 语义由应用层强校验）
+   - `status VARCHAR(20) DEFAULT 'NORMAL'`：流水状态（字典 expense_status：NORMAL 正常 / VOID 已作废）
+   - `voucher_url VARCHAR(500)`：凭证（/common/upload 相对路径）
+   - `version INT DEFAULT 0`：乐观锁
+   - 存量数据初始化：`UPDATE expense SET status='NORMAL', version=0 WHERE status IS NULL`（幂等）
+   - 新索引 `idx_expense_split_id`（普通，PL 块预检幂等创建）
+
+3. **新增字典 `expense_status`**（dict_id=229，dict_code 20133–20134，2 项，dict_value 大写）
+   - `NORMAL` 正常（success，sort 1）
+   - `VOID` 已作废（info，sort 2）
+
+4. **新增 `sys_config` 配置项**
+   - `config_name='经费记账-允许透支'`、`config_key='biz.expense.allowOverdraft'`、`config_value='false'`、`config_type='Y'`
+   - `INSERT...WHERE NOT EXISTS` 幂等；`config_id` 取当前 `MAX(config_id)+1` 动态子查询（避免跨环境硬编码冲突），devdm 现有 MAX=6，本次落地为 7
+
+5. **新增菜单 7 项**（sys_menu 2040–2046，挂在 2010 科研管理下，order_num=4）
+   - 2040 C 经费管理（path=expense，component=biz/expense/index，perms=biz:expense:list，icon=money）
+   - 2041 F 查询（biz:expense:query）
+   - 2042 F 记账（biz:expense:add）
+   - 2043 F 作废（biz:expense:void）
+   - 2044 F 导出（biz:expense:export）
+   - 2045 F 预算调整（biz:expense:budget）
+   - 2046 F 预警查看（biz:expense:alert）
+
+6. **角色挂载（任务卡 §2.5 矩阵，实算共 30 条 `sys_role_menu`）**
+   - admin(1) / science_admin(101)：全部 7 项（2040–2046）
+   - dept_leader(104)：6 项（2040/2041/2042/2043/2044/2045，无 alert）
+   - researcher(105)：4 项（2040/2041/2042/2046，可查可记账可看预警，不可作废/调预算）
+   - leader(100) / office(102) / labor_hr(103)：只读 2 项（2040+2041）
+   - **注**：任务卡 §2.5 正文写"共 31 条"，但按矩阵逐项列出的角色×菜单实算为 7+7+6+4+2+2+2=30 条；矩阵优先于总数，已在 SQL 注释与本节说明，脚本按 30 条矩阵实算落地
+
+**幂等性设计**：
+- 列添加走 `ALTER TABLE ADD IF NOT EXISTS`（达梦支持，同 V1.0.6/V1.0.8/V1.0.9/V1.0.10）；`COMMENT ON COLUMN` 直接执行（重跑覆盖为同值，零副作用）
+- 存量初始化 `UPDATE ... WHERE xxx IS NULL`：首次命中存量行，二次重跑因列已非 NULL 而 0 行命中，零副作用
+- 唯一/普通索引走 PL 匿名块预检 `USER_INDEXES` 后再 `CREATE [UNIQUE] INDEX`；唯一索引额外在预检通过后、建索引前用子查询 `GROUP BY ... HAVING COUNT(*)>1` 查重复行，重复行数>0 则 `RAISE_APPLICATION_ERROR(-20001, ...)` 中止创建（本次 devdm 勘查 0 条重复，未触发）
+- 字典 / sys_config / 菜单 / 角色菜单挂载走 `INSERT ... SELECT ... WHERE NOT EXISTS`
+- **首次执行 59/59 成功；二次重跑 59/59 全绿零副作用**
+
+**终审后追加（2026-08-14，随阶段4 终审修复轮回写脚本）**：
+- **存量数据自愈 UPDATE**（脚本末尾追加，幂等）：DM8 对 `ALTER TABLE ADD col DEFAULT` 会给存量行回填默认值（非 NULL），导致上面"存量初始化 UPDATE ... WHERE used_amount IS NULL"命中 0 行——devdm 实测 2 行存量 balance 错位（=0 而非 budget_amount），Task 5 已一次性修复。脚本末尾现追加恒等式自愈语句 `UPDATE budget_split SET balance = budget_amount - NVL(used_amount,0) ... WHERE balance <> budget_amount - NVL(used_amount,0)`，任何环境重跑均可自愈，devdm 验证两次执行 0 行、恒等式零偏差。**其他环境执行 V1.0.11 请使用含此语句的最新版脚本**
+- **业务语义备注（终审 P2-2）**：课题保存路径为全量终态语义——若把课题预算所有科目归零，已有流水的科目 balance 会变为负数并触发 CRITICAL 预警，这是预期行为（"该科目无预算但有历史支出"应当报警），非缺陷
+
+**DB 复查**（`python .tmp/check_v1011_after.py`，全部 PASS）：
+- budget_split 表现有 13 列（10 原 + 3 新），`USED_AMOUNT`/`BALANCE`/`VERSION` 列存在且无 NULL 行
+- `IDX_BUDGET_SPLIT_PC_UK` 存在且 UNIQUE，列顺序 = PROJECT_ID/CATEGORY/DEL_FLAG
+- expense 表现有 17 列（13 原 + 4 新），`SPLIT_ID`/`STATUS`/`VOUCHER_URL`/`VERSION` 列存在，STATUS 无 NULL 行
+- `IDX_EXPENSE_SPLIT_ID` 存在
+- `sys_dict_type` dict_id=229='经费记账状态'/expense_status，status='0'
+- `sys_dict_data` 20133–20134（2 项，NORMAL/VOID 大写，list_class success/info，dict_sort 1/2）
+- `sys_config` config_key='biz.expense.allowOverdraft'，config_value='false'，config_type='Y'（落地 config_id=7）
+- `sys_menu` 2040–2046 共 7 项，类型/父菜单/组件/权限/名称全部对齐任务卡 §2.5
+- `sys_role_menu` 7 角色挂载总数 = 30 条（§2.5 矩阵实算 7+7+6+4+2+2+2=30 一致）
+
+**依赖**：
+- V1.0.0：`budget_split` / `expense` 表（10 列 + 13 列）
+- V1.0.1：`sys_dict_type` / `sys_dict_data` 框架表；`sys_config` 框架表
+- V1.0.4：6 业务角色（100–105）
+- V1.0.6：菜单 2010（科研管理目录）
+- V1.0.7：字典 `budget_category`（dict_id=222，10 科目，budget_split.category 同源复用）
+
+**后续任务**：
+- 阶段4 Task 2：后端预算侧（BudgetSplit Domain 加三列 + `@Version` + D1 前置改造 ProjectServiceImpl.updateProject 预算分支「按 category 增量更新保 split_id」+ 监管上限校验 + /biz/budget 三端点 + project 汇总派生）
+- 阶段4 Task 3：后端记账侧（Expense Domain/Mapper/XML + 记账/作废/冲销事务 + BudgetAlertService 双阈值预警 + /biz/expense 六端点 + 数据权限双通道）
+- 阶段4 Task 4：前端（预算概览 + 流水 + 记账/调整/作废弹窗 + 预警区，前端分支 feature/biz-expense-ui）
+- 阶段4 Task 5：冒烟（任务卡 §七 10 项：预算调整split_id不变/监管上限/记账正确性/预算不足/乐观锁并发/作废/冲销/双阈值预警/数据权限/回归）+ 回归 smoke_project / smoke_contract 关键子集
 

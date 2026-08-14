@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.ExpenseMapper">
+
+    <resultMap type="Expense" id="ExpenseResult">
+        <id     property="expenseId"   column="expense_id"   />
+        <result property="projectId"   column="project_id"   />
+        <result property="splitId"     column="split_id"     />
+        <result property="amount"      column="amount"       />
+        <result property="taxRate"     column="tax_rate"     />
+        <result property="expenseDate" column="expense_date" />
+        <result property="category"    column="category"     />
+        <result property="status"      column="status"       />
+        <result property="voucherUrl"  column="voucher_url"  />
+        <result property="description" column="description"  />
+        <result property="version"     column="version"      />
+        <result property="delFlag"     column="del_flag"     />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"  column="create_time"  />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"  column="update_time"  />
+        <result property="remark"      column="remark"       />
+        <result property="projectNo"   column="project_no"   />
+        <result property="projectName" column="project_name" />
+    </resultMap>
+
+    <!-- 数据范围联接（@DataScope deptAlias=d / userAlias=u）：
+         d = sys_dept、u = sys_user 两个别名专供数据权限使用，不得被业务表占用 -->
+    <sql id="selectExpenseVo">
+        select e.expense_id, e.project_id, e.split_id, e.amount, e.tax_rate, e.expense_date,
+               e.category, e.status, e.voucher_url, e.description, e.version, e.del_flag,
+               e.create_by, e.create_time, e.update_by, e.update_time, e.remark,
+               p.project_no, p.project_name
+        from expense e
+        join project p        on e.project_id = p.project_id
+        left join sys_dept d  on p.dept_id    = d.dept_id
+        left join sys_user u  on p.leader_id  = u.user_id
+    </sql>
+
+    <!-- 列表公共筛选（projectId / category / status / 费用日期区间） -->
+    <sql id="expenseFilters">
+        <if test="projectId != null"> and e.project_id = #{projectId} </if>
+        <if test="category != null and category != ''"> and e.category = #{category} </if>
+        <if test="status != null and status != ''"> and e.status = #{status} </if>
+        <if test="params.beginExpenseDate != null and params.beginExpenseDate != ''">
+            and to_char(e.expense_date, 'yyyy-MM-dd') <![CDATA[ >= ]]> #{params.beginExpenseDate}
+        </if>
+        <if test="params.endExpenseDate != null and params.endExpenseDate != ''">
+            and to_char(e.expense_date, 'yyyy-MM-dd') <![CDATA[ <= ]]> #{params.endExpenseDate}
+        </if>
+    </sql>
+
+    <!-- 列表：走 @DataScope 通道（deptAlias=d, userAlias=u），researcher 不调用此方法 -->
+    <select id="selectExpenseList" parameterType="Expense" resultMap="ExpenseResult">
+        <include refid="selectExpenseVo"/>
+        <where>
+            e.del_flag = '0' and p.del_flag = '0'
+            <include refid="expenseFilters"/>
+            <!-- 数据范围过滤（@DataScope 注入 params.dataScope） -->
+            ${params.dataScope}
+        </where>
+        order by e.expense_date desc, e.expense_id desc
+    </select>
+
+    <!-- researcher 列表（本人相关）：所属课题 leader_id = me OR 课题成员含 me -->
+    <select id="selectExpenseListForResearcher" parameterType="Expense" resultMap="ExpenseResult">
+        <include refid="selectExpenseVo"/>
+        <where>
+            e.del_flag = '0' and p.del_flag = '0'
+            <include refid="expenseFilters"/>
+            and (
+                p.leader_id = #{params.selfUserId}
+                or exists (
+                    select 1 from project_member m
+                     where m.project_id = p.project_id
+                       and m.user_id    = #{params.selfUserId}
+                       and m.del_flag   = '0'
+                )
+            )
+        </where>
+        order by e.expense_date desc, e.expense_id desc
+    </select>
+
+    <!-- 详情：JOIN project 带课题编号/名称（不带数据范围，Service 走闸门） -->
+    <select id="selectExpenseById" parameterType="Long" resultMap="ExpenseResult">
+        <include refid="selectExpenseVo"/>
+        where e.del_flag = '0' and e.expense_id = #{expenseId}
+    </select>
+
+    <!-- 按课题逻辑删除全部有效流水（删课题级联调用） -->
+    <update id="softDeleteByProjectId">
+        update expense
+        set del_flag    = '2',
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where project_id = #{projectId}
+          and del_flag   = '0'
+    </update>
+</mapper>

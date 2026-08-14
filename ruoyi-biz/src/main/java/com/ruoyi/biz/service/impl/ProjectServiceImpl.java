@@ -7,6 +7,7 @@ import com.ruoyi.biz.domain.ProjectMember;
 import com.ruoyi.biz.domain.ProjectUnit;
 import com.ruoyi.biz.mapper.BudgetSplitMapper;
 import com.ruoyi.biz.mapper.CooperativeUnitMapper;
+import com.ruoyi.biz.mapper.ExpenseMapper;
 import com.ruoyi.biz.mapper.ProjectMapper;
 import com.ruoyi.biz.mapper.ProjectMemberMapper;
 import com.ruoyi.biz.mapper.ProjectUnitMapper;
@@ -70,9 +71,11 @@ public class ProjectServiceImpl implements IProjectService {
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final BudgetSplitMapper budgetSplitMapper;
+    private final ExpenseMapper expenseMapper;
     private final ProjectUnitMapper projectUnitMapper;
     private final CooperativeUnitMapper cooperativeUnitMapper;
     private final SysUserMapper sysUserMapper;
+    private final BudgetSupport budgetSupport;
 
     // ========================================================
     //  列表 / 详情（数据范围）
@@ -197,7 +200,10 @@ public class ProjectServiceImpl implements IProjectService {
         }
 
         // 7. 写入预算细分（与主表同事务；projectId 需等主表 insert 回填）
-        attachAndInsertSplits(project.getBudgetSplitList(), project.getProjectId(), operName);
+        //    走与编辑同一条增量通道（D1）：新建时库中无行，等价于逐行 INSERT（used=0/balance=budget/version=0），
+        //    同时完成科目白名单+去重校验与 §4.4 监管上限校验，超限则整笔回滚。
+        //    主表 budget_total/budget_balance 已在第 4 步按同一份清单算好（新建时 balance = budget），无需再写一次
+        budgetSupport.applySplits(project.getProjectId(), project.getBudgetSplitList(), true, operName);
         return project;
     }
 
@@ -224,18 +230,20 @@ public class ProjectServiceImpl implements IProjectService {
         project.setProjectNo(db.getProjectNo());
         project.setLeaderId(db.getLeaderId());
         project.setStatus(db.getStatus());
-        // 预算细分全量替换（同事务）：删旧插新，预算总额 = Σ 各科目金额
-        // 请求体未带 budgetSplitList（null）则预算总额以库原值为准，忽略客户端传入值（保持 Σ 不变式）；传空列表表示清空
+        // 预算细分按 category 增量更新（同事务，决策 D1 / §4.5）：改金额保 split_id，绝不删旧插新，
+        // 否则引入 expense.split_id 后历史流水会悬空；本次未传的科目金额置 0 但保留行（有流水的行删了会悬空）。
+        // 请求体未带 budgetSplitList（null）则预算两列以库原值为准，忽略客户端传入值（保持 Σ 不变式）；传空列表表示全部置 0。
         if (project.getBudgetSplitList() != null) {
-            BigDecimal budgetTotal = normalizeBudgetSplits(project.getBudgetSplitList());
-            project.setBudgetTotal(budgetTotal);
-            budgetSplitMapper.deleteByProjectId(project.getProjectId());
-            attachAndInsertSplits(project.getBudgetSplitList(), project.getProjectId(), operName);
+            normalizeBudgetSplits(project.getBudgetSplitList());
+            // 全量终态语义：库中存在但本次未传的科目金额置 0（zeroMissing=true）
+            BudgetSupport.Totals totals = budgetSupport.applySplits(
+                    project.getProjectId(), project.getBudgetSplitList(), true, operName);
+            // D3：两列均由 budget_split 派生，不接受前端直传
+            project.setBudgetTotal(totals.getBudgetTotal());
+            project.setBudgetBalance(totals.getBalanceTotal());
         } else {
+            // 此分支不重跑监管上限校验（现状维持语义：用户未动预算）
             project.setBudgetTotal(db.getBudgetTotal());
-        }
-        if (project.getBudgetBalance() == null) {
-            // 余额不通过此接口改（阶段4 维护）
             project.setBudgetBalance(db.getBudgetBalance());
         }
         project.setUpdateBy(operName);
@@ -264,6 +272,10 @@ public class ProjectServiceImpl implements IProjectService {
             }
             // 级联逻辑删除全部有效成员（含组长），与课题删除同事务
             projectMemberMapper.softDeleteByProjectId(pid, operName);
+            // 级联逻辑删除全部有效预算细分（任务卡 §九：删课题不级联 budget_split 挂账，本期落地）；
+            // 经费流水 expense 的级联同事务一并落地（C-1 收口）
+            budgetSplitMapper.softDeleteByProjectId(pid, operName);
+            expenseMapper.softDeleteByProjectId(pid, operName);
         }
         // BaseMapper.deleteByIds 走 @TableLogic 自动改写 del_flag='2'
         return projectMapper.deleteByIds(Arrays.asList(projectIds));
@@ -642,25 +654,6 @@ public class ProjectServiceImpl implements IProjectService {
             total = total.add(amt);
         }
         return total;
-    }
-
-    /**
-     * 补全预算细分的 projectId / delFlag / createBy 后批量入库（新增与编辑全量替换共用）。
-     * 空列表直接跳过；行内 category 为空由 DB NOT NULL 约束兜底。
-     */
-    private void attachAndInsertSplits(List<BudgetSplit> splits, Long projectId, String operName) {
-        if (splits == null || splits.isEmpty()) {
-            return;
-        }
-        for (BudgetSplit split : splits) {
-            if (split == null) {
-                continue;
-            }
-            split.setProjectId(projectId);
-            split.setDelFlag("0");
-            split.setCreateBy(operName);
-        }
-        budgetSplitMapper.batchInsert(splits);
     }
 
     /**

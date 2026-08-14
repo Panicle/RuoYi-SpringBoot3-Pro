@@ -77,6 +77,14 @@ public interface ProjectMapper extends BaseMapper<Project> {
                      @Param("budgetTotal") BigDecimal budgetTotal);
 
     /**
+     * 更新预算汇总两列（决策 D3：budget_total = Σ budget_amount、budget_balance = Σ balance，
+     * 由 budget_split 事务内派生；预算调整 / 记账事务共用，不接受前端直传）
+     */
+    int updateBudgetSummary(@Param("projectId") Long projectId,
+                            @Param("budgetTotal") BigDecimal budgetTotal,
+                            @Param("budgetBalance") BigDecimal budgetBalance);
+
+    /**
      * 按课题编号查重（人工输入编号唯一性校验）。
      * 不按 del_flag 过滤：DB 唯一索引 idx_project_no_uk 对软删行同样生效，
      * 故需连同软删行一起判定，给友好业务错误而非 DB 唯一冲突。

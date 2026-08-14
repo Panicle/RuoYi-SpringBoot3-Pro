@@ -7,6 +7,9 @@
         <result property="projectId"    column="project_id"    />
         <result property="category"     column="category"      />
         <result property="budgetAmount" column="budget_amount" />
+        <result property="usedAmount"   column="used_amount"   />
+        <result property="balance"      column="balance"       />
+        <result property="version"      column="version"       />
         <result property="delFlag"      column="del_flag"      />
         <result property="createBy"     column="create_by"     />
         <result property="createTime"   column="create_time"   />
@@ -15,30 +18,33 @@
         <result property="remark"       column="remark"        />
     </resultMap>
 
-    <!-- 查询课题预算细分列表 -->
-    <select id="selectByProjectId" parameterType="Long" resultMap="BudgetSplitResult">
-        select split_id, project_id, category, budget_amount, del_flag,
+    <sql id="selectBudgetSplitVo">
+        select split_id, project_id, category, budget_amount, used_amount, balance, version, del_flag,
                create_by, create_time, update_by, update_time, remark
         from budget_split
+    </sql>
+
+    <!-- 查询课题预算细分列表 -->
+    <select id="selectByProjectId" parameterType="Long" resultMap="BudgetSplitResult">
+        <include refid="selectBudgetSplitVo"/>
         where project_id = #{projectId}
           and del_flag   = '0'
         order by category
     </select>
 
-    <!-- 批量插入预算细分 -->
-    <insert id="batchInsert">
-        insert into budget_split
-            (project_id, category, budget_amount, del_flag, create_by, create_time, remark)
-        values
-        <foreach collection="list" item="item" separator=",">
-            (#{item.projectId}, #{item.category}, #{item.budgetAmount}, #{item.delFlag}, #{item.createBy}, sysdate, #{item.remark})
-        </foreach>
-    </insert>
+    <!-- 按 (课题, 科目) 查有效行（唯一索引 idx_budget_split_pc_uk 保证至多 1 行） -->
+    <select id="selectByProjectAndCategory" resultMap="BudgetSplitResult">
+        <include refid="selectBudgetSplitVo"/>
+        where project_id = #{projectId}
+          and category   = #{category}
+          and del_flag   = '0'
+    </select>
 
-    <!-- 按课题逻辑删除预算细分（编辑全量替换前调用） -->
-    <update id="deleteByProjectId">
+    <!-- 按课题逻辑删除全部有效预算行（删课题级联调用） -->
+    <update id="softDeleteByProjectId">
         update budget_split
         set del_flag    = '2',
+            update_by   = #{updateBy},
             update_time = sysdate
         where project_id = #{projectId}
           and del_flag   = '0'
