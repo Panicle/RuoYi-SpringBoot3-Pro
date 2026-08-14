@@ -493,6 +493,10 @@
 - 字典 / sys_config / 菜单 / 角色菜单挂载走 `INSERT ... SELECT ... WHERE NOT EXISTS`
 - **首次执行 59/59 成功；二次重跑 59/59 全绿零副作用**
 
+**终审后追加（2026-08-14，随阶段4 终审修复轮回写脚本）**：
+- **存量数据自愈 UPDATE**（脚本末尾追加，幂等）：DM8 对 `ALTER TABLE ADD col DEFAULT` 会给存量行回填默认值（非 NULL），导致上面"存量初始化 UPDATE ... WHERE used_amount IS NULL"命中 0 行——devdm 实测 2 行存量 balance 错位（=0 而非 budget_amount），Task 5 已一次性修复。脚本末尾现追加恒等式自愈语句 `UPDATE budget_split SET balance = budget_amount - NVL(used_amount,0) ... WHERE balance <> budget_amount - NVL(used_amount,0)`，任何环境重跑均可自愈，devdm 验证两次执行 0 行、恒等式零偏差。**其他环境执行 V1.0.11 请使用含此语句的最新版脚本**
+- **业务语义备注（终审 P2-2）**：课题保存路径为全量终态语义——若把课题预算所有科目归零，已有流水的科目 balance 会变为负数并触发 CRITICAL 预警，这是预期行为（"该科目无预算但有历史支出"应当报警），非缺陷
+
 **DB 复查**（`python .tmp/check_v1011_after.py`，全部 PASS）：
 - budget_split 表现有 13 列（10 原 + 3 新），`USED_AMOUNT`/`BALANCE`/`VERSION` 列存在且无 NULL 行
 - `IDX_BUDGET_SPLIT_PC_UK` 存在且 UNIQUE，列顺序 = PROJECT_ID/CATEGORY/DEL_FLAG

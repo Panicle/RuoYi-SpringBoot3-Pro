@@ -270,5 +270,14 @@ INSERT INTO sys_role_menu (role_id, menu_id) SELECT 105, 2042 FROM DUAL WHERE NO
 INSERT INTO sys_role_menu (role_id, menu_id) SELECT 105, 2046 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = 105 AND menu_id = 2046);
 
 -- ============================================================================
+-- 存量数据自愈（终审 P2-3 追加，幂等）
+-- 背景：DM8 对 ALTER TABLE ADD col DEFAULT 会给存量行回填默认值（非 NULL），
+-- 第 48 行的 WHERE used_amount IS NULL 在该行为下命中 0 行，导致存量行
+-- balance=0 而非 budget_amount（devdm 实测 2 行错位，Task 5 已修）。
+-- 本语句按恒等式 balance = budget_amount - used_amount 兜底自愈，可重复执行。
+-- ============================================================================
+UPDATE budget_split SET balance = budget_amount - NVL(used_amount, 0), used_amount = NVL(used_amount, 0), version = NVL(version, 0) WHERE del_flag = '0' AND (balance IS NULL OR balance <> budget_amount - NVL(used_amount, 0));
+
+-- ============================================================================
 -- 完
 -- ============================================================================
