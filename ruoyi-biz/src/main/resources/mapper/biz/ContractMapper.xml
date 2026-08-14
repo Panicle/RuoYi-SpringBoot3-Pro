@@ -33,10 +33,12 @@
                c.contract_no, c.party_unit_id, c.party_name, c.start_date, c.file_url,
                c.create_by, c.create_time, c.update_by, c.update_time, c.remark,
                p.project_no, p.project_name,
-               u.unit_name as party_unit_name
+               cu.unit_name as party_unit_name
         from contract c
-        join project p          on c.project_id   = p.project_id
-        left join cooperative_unit u on c.party_unit_id = u.unit_id
+        join project p             on c.project_id   = p.project_id
+        left join cooperative_unit cu on c.party_unit_id = cu.unit_id
+        left join sys_dept d       on p.dept_id      = d.dept_id
+        left join sys_user u       on p.leader_id    = u.user_id
     </sql>
 
     <!-- 列表：走 @DataScope 通道（deptAlias=d, userAlias=u），researcher 不调用此方法 -->

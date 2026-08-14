@@ -856,8 +856,8 @@ def case_07_delete_contract_cascade(sess) -> Tuple[Dict[str, Any], bool]:
     if base_ok:
         ok_dup, dup_res = db_execute(
             "INSERT INTO RUOYI.CONTRACT (CONTRACT_NO, PROJECT_ID, CONTRACT_NAME, CONTRACT_TYPE, "
-            "PARTY_NAME, STATUS, DEL_FLAG, CREATE_BY, CREATE_TIME, REMARK, TENANT_ID) "
-            "VALUES (?, ?, 'DUP唯一性兜底-2', 'RESEARCH', 'X', 'ACTIVE', '0', 'admin', SYSDATE, ?, '000000')",
+            "PARTY_NAME, STATUS, DEL_FLAG, CREATE_BY, CREATE_TIME, REMARK) "
+            "VALUES (?, ?, 'DUP唯一性兜底-2', 'RESEARCH', 'X', 'ACTIVE', '0', 'admin', SYSDATE, ?)",
             [dup_no, pid, TEST_MARK])
         # 期望：失败（唯一索引拒绝）。返回 rowcount=-3 或 False
         out["unique_bypass"] = {"ok": ok_dup, "res": dup_res}
