@@ -464,7 +464,7 @@ def case_23_add_member_host_rejected(sess) -> Dict[str, Any]:
     r = http(sess, "POST", "/biz/project/member", json_body=body)
     b = safe_json(r)
     msg = str(b.get("msg") or "") if isinstance(b, dict) else ""
-    ok = r.status_code == 200 and isinstance(b, dict) and b.get("code") != 200 and "换主持人请用专用接口" in msg
+    ok = r.status_code == 200 and isinstance(b, dict) and b.get("code") != 200 and "换组长请用专用接口" in msg
     return {"request_body": body, "status_code": r.status_code, "body": b, "raw": r.text[:400]}, ok
 
 
@@ -511,7 +511,7 @@ def case_26_remove_host_rejected(sess) -> Tuple[Dict[str, Any], bool]:
     r = http(sess, "DELETE", f"/biz/project/member/{host_mid}")
     b = safe_json(r)
     msg = str(b.get("msg") or "") if isinstance(b, dict) else ""
-    ok = r.status_code == 200 and isinstance(b, dict) and b.get("code") != 200 and "唯一 HOST" in msg
+    ok = r.status_code == 200 and isinstance(b, dict) and b.get("code") != 200 and "唯一组长" in msg
     return {"member_id": host_mid, "status_code": r.status_code, "body": b, "raw": r.text[:400]}, ok
 
 

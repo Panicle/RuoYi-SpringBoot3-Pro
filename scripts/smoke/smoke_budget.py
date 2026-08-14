@@ -36,7 +36,10 @@ TEST_MARK = "smoke-task4-budget"
 SCRIPT_DIR = SP.SCRIPT_DIR
 RESULT_PATH = os.path.join(SCRIPT_DIR, "result_budget.jsonl")
 
-# 10 项预算科目（按字典 budget_category，值大写）——金额总和 = 100.50+200.00+300.00+150.00+80.00+120.25+90.00+250.75+400.00+50.00 = 1741.50
+# 10 项预算科目（按字典 budget_category，值大写）
+# ——金额总和 = 100.50+200.00+300.00+150.00+80.00+120.25+90.00+250.75+200.00+50.00 = 1541.50
+# OUTSOURCING 由原 400.00 降至 200.00：B=840.75（EQUIPMENT=200 计入直接费但从 B 中减），间接费上限 252.23，
+# INDIRECT=250.75≤252.23 ✓，委外上限 252.23，OUTSOURCING=200≤252.23 ✓（参见 task-2-report §四 C-2）
 SPLITS_10 = [
     {"category": "LABOR",        "budgetAmount": "100.50"},
     {"category": "EQUIPMENT",    "budgetAmount": "200.00"},
@@ -46,10 +49,10 @@ SPLITS_10 = [
     {"category": "TRAVEL",       "budgetAmount": "120.25"},
     {"category": "PUBLICATION",  "budgetAmount": "90.00"},
     {"category": "INDIRECT",     "budgetAmount": "250.75"},
-    {"category": "OUTSOURCING",  "budgetAmount": "400.00"},
+    {"category": "OUTSOURCING",  "budgetAmount": "200.00"},
     {"category": "TAX",          "budgetAmount": "50.00"},
 ]
-SUM_10 = Decimal("1741.50")
+SUM_10 = Decimal("1541.50")
 
 # 替换后的 5 项预算细分——金额总和 = 1.00+2.00+3.00+4.00+5.00 = 15.00
 SPLITS_5 = [
@@ -100,10 +103,21 @@ def db_split_rows(pid: int, del_flag: str = "0") -> Tuple[bool, Any]:
     return ok, res
 
 
+def db_split_ids_before(pid: int) -> Tuple[bool, Dict[str, int]]:
+    """取调整前每科目 split_id 字典，供 case_04 比对 split_id 不变（任务卡 §七.1）。"""
+    ok, res = SP.db_query(
+        "SELECT CATEGORY, SPLIT_ID FROM RUOYI.BUDGET_SPLIT WHERE PROJECT_ID = ? AND DEL_FLAG = '0' "
+        "ORDER BY CATEGORY", [pid])
+    if not ok or not res["rows"]:
+        return False, {}
+    return True, {r[0]: int(r[1]) for r in res["rows"]}
+
+
 def add_project(sess, name: str, leader_id: int, project_no: str, project_type: str = "NATIONAL",
                 splits: Optional[List[Dict]] = None) -> Tuple[Dict, bool, Optional[int]]:
     body = {"projectName": name, "projectType": project_type, "leaderId": leader_id,
-            "projectNo": project_no, "remark": TEST_MARK}
+            "projectNo": project_no, "projectCategory": "A", "specialty": "Y",
+            "remark": TEST_MARK}
     if splits is not None:
         body["budgetSplitList"] = splits
     r = SP.http(sess, "POST", "/biz/project", json_body=body)
@@ -126,7 +140,8 @@ def get_detail(sess, pid: int) -> Tuple[Dict, bool]:
 # ====================== C1：新增不传 projectNo → 报错 ======================
 
 def case_01_add_no_projectno(sess) -> Tuple[Dict[str, Any], bool]:
-    body = {"projectName": "冒烟预算-缺编号", "projectType": "NATIONAL", "leaderId": 3, "remark": TEST_MARK}
+    body = {"projectName": "冒烟预算-缺编号", "projectType": "NATIONAL", "leaderId": 3,
+            "projectCategory": "A", "specialty": "Y", "remark": TEST_MARK}
     r = SP.http(sess, "POST", "/biz/project", json_body=body)
     b = SP.safe_json(r)
     msg = str(b.get("msg") or "") if isinstance(b, dict) else ""
@@ -145,7 +160,7 @@ def case_02_add_dup_projectno(sess) -> Tuple[Dict[str, Any], bool]:
     STATE["dup_owner_id"] = pid
     STATE["dup_owner_no"] = no
     body = {"projectName": "冒烟预算-重复编号", "projectType": "NATIONAL", "leaderId": 3,
-            "projectNo": no, "remark": TEST_MARK}
+            "projectNo": no, "projectCategory": "A", "specialty": "Y", "remark": TEST_MARK}
     r = SP.http(sess, "POST", "/biz/project", json_body=body)
     b = SP.safe_json(r)
     msg = str(b.get("msg") or "") if isinstance(b, dict) else ""
@@ -190,32 +205,66 @@ def case_03_add_10_splits(sess) -> Tuple[Dict[str, Any], bool]:
             "db_budget_total": str(db_total), "expected_total": str(SUM_10)}, ok
 
 
-# ====================== C4：修改预算细分 → 全量替换 ======================
+# ====================== C4：修改预算细分 → D1 增量更新（金额清零保留行） ======================
 
 def case_04_update_splits_replace(sess) -> Tuple[Dict[str, Any], bool]:
+    """任务卡 §七.1：D1 改造后，改预算细分时「按 category 增量更新保 split_id」——
+    传 SPLITS_5（5 项）后：
+    - 5 项金额 = SPLITS_5 的预算金额
+    - 另 5 项金额 = 0（库中存在但本次未传 → 保留行+金额置 0）
+    - 有效行 = 10 条（无逻辑删）
+    - del_flag='2' 行 = 0 条
+    - 各行 split_id 与调整前逐一相同
+    """
     pid = STATE["split10_id"]
+    # 取调整前的 split_id 字典
+    _, ids_before = db_split_ids_before(pid)
     body = {"projectId": pid, "budgetSplitList": SPLITS_5}
     r = SP.http(sess, "PUT", "/biz/project", json_body=body)
     b = SP.safe_json(r)
     ok_put = r.status_code == 200 and isinstance(b, dict) and b.get("code") == 200
-    # DB：5 条活跃 + 旧 10 条已 del_flag='2'
+    # DB：活跃仍 10 条；不再产生 del_flag='2'
     ok_db, new_cnt = db_split_count(pid, "0")
-    ok_db, old_cnt = db_split_count(pid, "2")
+    _, old_cnt = db_split_count(pid, "2")
     _, db_total = db_project_field(pid, "BUDGET_TOTAL")
     ok_total = db_total is not None and Decimal(str(db_total)) == SUM_5
-    # 详情回显
+
+    # 5 项金额正确
+    rows5 = {r[0]: Decimal(str(r[1])) for r in (db_split_rows(pid, "0")[1]["rows"])}
+    expected5 = {s["category"]: Decimal(s["budgetAmount"]) for s in SPLITS_5}
+    expected5_zero = {"EQUIPMENT", "MATERIAL", "TESTING", "FUEL", "TRAVEL", "PUBLICATION",
+                      "INDIRECT", "OUTSOURCING", "TAX"}
+    # 移除 SPLITS_5 涉及的 5 项（LABOR/EQUIPMENT/MATERIAL/TESTING/FUEL），剩余应全 0
+    expected5_zero = expected5_zero - expected5.keys()
+    ok_5_amount = all(rows5.get(s["category"]) == expected5[s["category"]] for s in SPLITS_5)
+    ok_5_zero = all(rows5.get(cat) == Decimal("0.00") for cat in expected5_zero)
+
+    # split_id 与调整前逐一相同
+    _, ids_after = db_split_ids_before(pid)
+    all_same = len(ids_before) == len(ids_after) and all(
+        ids_before.get(cat) == ids_after.get(cat) for cat in ids_before
+    )
+
+    # 详情回显（10 条）
     det, ok_det = get_detail(sess, pid)
     splits = (det.get("data") or {}).get("budgetSplitList")
-    ok_detail = isinstance(splits, list) and len(splits) == 5
+    ok_detail = isinstance(splits, list) and len(splits) == 10
     api_total = (det.get("data") or {}).get("budgetTotal")
     ok_api_total = api_total is not None and Decimal(str(api_total)) == SUM_5
-    ok = ok_put and new_cnt == 5 and old_cnt >= 10 and ok_total and ok_detail and ok_api_total
+
+    ok = (ok_put and new_cnt == 10 and old_cnt == 0 and ok_total
+          and ok_5_amount and ok_5_zero and all_same
+          and ok_detail and ok_api_total)
     note = ""
     if not ok:
         note = (f"new_cnt={new_cnt} old_cnt={old_cnt} db_total={db_total} "
-                f"detail_len={len(splits) if isinstance(splits, list) else 'NA'} api_total={api_total}")
+                f"5_ok={ok_5_amount} zero_ok={ok_5_zero} ids_same={all_same} "
+                f"detail_len={len(splits) if isinstance(splits, list) else 'NA'} "
+                f"api_total={api_total}")
     return {"put_body": b, "db_new_cnt": new_cnt, "db_old_cnt": old_cnt, "db_budget_total": str(db_total),
-            "detail": det, "expected_total": str(SUM_5)}, ok
+            "detail": det, "expected_total": str(SUM_5),
+            "ids_before": ids_before, "ids_after": ids_after, "split_id_all_same": all_same,
+            "rows_after": {k: str(v) for k, v in rows5.items()}}, ok
 
 
 # ====================== C5：修改传不同 projectNo → 编号不变 ======================
