@@ -75,4 +75,10 @@ public class Alert extends BaseEntity {
     /** 预算科目（来自 budget_split.category，字典 budget_category） */
     @TableField(exist = false)
     private String category;
+
+    /** 状态标签（后端不填，前端字典 useDict('alert_status') 自行渲染）；
+     *  显式声明仅为避免下游误用 status 原值（UNREAD/READ/HANDLED）做展示——
+     *  前端按业务需要取 statusLabel 或直接用 status 原始值均可 */
+    @TableField(exist = false)
+    private String statusLabel;
 }

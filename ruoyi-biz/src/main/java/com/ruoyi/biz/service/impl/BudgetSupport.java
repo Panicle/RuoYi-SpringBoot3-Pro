@@ -341,6 +341,8 @@ public class BudgetSupport {
      */
     private void updateSplit(BudgetSplit db, BudgetSplit req, BigDecimal amount, BigDecimal balance,
                              String operName, Date now) {
+        // amount 与 balance 均未变化 = 无写意图，跳过 UPDATE 是安全的（不读不写不会丢更新，
+        // 反而避免课题保存时把 version 自增、顶掉别人正开着的预算调整弹窗）
         if (amount.compareTo(scale(nz(db.getBudgetAmount()))) == 0
                 && balance.compareTo(scale(nz(db.getBalance()))) == 0) {
             return;

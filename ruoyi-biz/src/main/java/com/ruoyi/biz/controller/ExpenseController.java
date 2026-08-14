@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -117,7 +116,7 @@ public class ExpenseController extends BaseController {
         BigDecimal amount;
         try {
             originExpenseId = (originObj instanceof Number) ? ((Number) originObj).longValue() : Long.parseLong(originObj.toString());
-            amount = (amountObj instanceof Number) ? new BigDecimal(amountObj.toString()) : new BigDecimal(amountObj.toString());
+            amount = new BigDecimal(amountObj.toString());
         } catch (NumberFormatException e) {
             return error("参数格式错误");
         }
@@ -212,8 +211,4 @@ public class ExpenseController extends BaseController {
         }
         return null;
     }
-
-    /** 静默占位：防止 HashMap 引用在某些静态分析下报 unused */
-    @SuppressWarnings("unused")
-    private static final Map<String, Object> EMPTY_BODY = new HashMap<>();
 }

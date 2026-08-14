@@ -242,6 +242,7 @@ public class ProjectServiceImpl implements IProjectService {
             project.setBudgetTotal(totals.getBudgetTotal());
             project.setBudgetBalance(totals.getBalanceTotal());
         } else {
+            // 此分支不重跑监管上限校验（现状维持语义：用户未动预算）
             project.setBudgetTotal(db.getBudgetTotal());
             project.setBudgetBalance(db.getBudgetBalance());
         }

@@ -419,35 +419,48 @@ public class ExpenseServiceImpl implements IExpenseService {
         throw new ServiceException("splitId 与 category 至少传一个");
     }
 
+    /** 幂等写经费预警的串行化锁对象（私有 final，非 this，避免外部持锁） */
+    private final Object alertLock = new Object();
+
     /**
      * 幂等写经费预警（§4.3）：同 (alert_type='BUDGET', ref_id) 且 status ∈ (UNREAD, READ)
      * 已存在则不重复写。
+     *
+     * <p><b>单机部署下</b>，本方法整体加 synchronized 防止并发双写——
+     * check-then-insert 之间的窗口不靠 DB 唯一约束保护（alert 表当前无该函数索引）。
+     * <b>集群化部署时</b>需改为 alert 表函数唯一索引：
+     * {@code CREATE UNIQUE INDEX ... ON alert (CASE WHEN status IN ('UNREAD','READ') THEN alert_type || '_' || ref_id END)}，
+     * 并把 catch DuplicateKeyException 转为"幂等成功"静默返回。</p>
      */
     private void writeBudgetAlertIfAbsent(BudgetSplit split, Project project, String operName) {
-        if (alertMapper.countPendingBudgetAlert(split.getSplitId()) > 0) {
-            return;     // 已有未处理预警，跳过
+        synchronized (alertLock) {
+            if (alertMapper.countPendingBudgetAlert(split.getSplitId()) > 0) {
+                return;     // 已有未处理预警，跳过
+            }
+            Alert alert = new Alert();
+            alert.setAlertType(ALERT_TYPE_BUDGET);
+            alert.setRefId(split.getSplitId());
+            alert.setAlertLevel(ALERT_LEVEL_CRITICAL.equals(split.getAlertLevel()) ? ALERT_LEVEL_CRITICAL : ALERT_LEVEL_WARN);
+            String title = "预算预警：" + project.getProjectNo() + " / " + split.getCategory();
+            alert.setTitle(title);
+            BigDecimal balance = nz(split.getBalance());
+            BigDecimal budget  = nz(split.getBudgetAmount());
+            String content = title + " 余额 " + scale(balance).toPlainString()
+                    + " 元 / 预算 " + scale(budget).toPlainString() + " 元";
+            if (ALERT_LEVEL_CRITICAL.equals(alert.getAlertLevel())) {
+                content += "（已透支，请立即处理）";
+            }
+            alert.setContent(content);
+            alert.setStatus(ALERT_STATUS_UNREAD);
+            alert.setDelFlag("0");
+            alert.setCreateBy(operName);
+            alertMapper.insert(alert);
         }
-        Alert alert = new Alert();
-        alert.setAlertType(ALERT_TYPE_BUDGET);
-        alert.setRefId(split.getSplitId());
-        alert.setAlertLevel(ALERT_LEVEL_CRITICAL.equals(split.getAlertLevel()) ? ALERT_LEVEL_CRITICAL : ALERT_LEVEL_WARN);
-        String title = "预算预警：" + project.getProjectNo() + " / " + split.getCategory();
-        alert.setTitle(title);
-        BigDecimal balance = nz(split.getBalance());
-        BigDecimal budget  = nz(split.getBudgetAmount());
-        String content = title + " 余额 " + scale(balance).toPlainString()
-                + " 元 / 预算 " + scale(budget).toPlainString() + " 元";
-        if (ALERT_LEVEL_CRITICAL.equals(alert.getAlertLevel())) {
-            content += "（已透支，请立即处理）";
-        }
-        alert.setContent(content);
-        alert.setStatus(ALERT_STATUS_UNREAD);
-        alert.setDelFlag("0");
-        alert.setCreateBy(operName);
-        alertMapper.insert(alert);
     }
 
-    /** 预警列表补字典翻译 */
+    /** 预警列表补字典翻译：仅翻译 alertLevel（alert_status 字典不存在，
+     *  DictUtils 返回空串会导致 API 里 status 恒为空，前端却要靠 status 原始值
+     *  UNREAD/READ/HANDLED 隐藏"标记已处理"按钮——故 status 原样返回）。 */
     private List<Alert> fillAlertLabels(List<Alert> list) {
         if (list == null || list.isEmpty()) {
             return list;
@@ -457,7 +470,6 @@ public class ExpenseServiceImpl implements IExpenseService {
                 continue;
             }
             a.setAlertLevel(com.ruoyi.common.utils.DictUtils.getDictLabel("alert_level", a.getAlertLevel()));
-            a.setStatus(com.ruoyi.common.utils.DictUtils.getDictLabel("alert_status", a.getStatus()));
         }
         return list;
     }
