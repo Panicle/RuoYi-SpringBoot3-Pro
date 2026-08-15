@@ -2,6 +2,7 @@ package com.ruoyi.biz.controller;
 
 import com.ruoyi.biz.domain.Alert;
 import com.ruoyi.biz.domain.Notification;
+import com.ruoyi.biz.service.AlertScanService;
 import com.ruoyi.biz.service.IAlertService;
 import com.ruoyi.biz.service.INotificationService;
 import com.ruoyi.common.annotation.Log;
@@ -36,6 +37,7 @@ public class AlertController extends BaseController {
 
     private final IAlertService alertService;
     private final INotificationService notificationService;
+    private final AlertScanService alertScanService;
 
     /**
      * 1. 预警列表（分页；筛选 alertType/alertLevel/status/refType；@DataScope 双通道）
@@ -108,5 +110,17 @@ public class AlertController extends BaseController {
     @GetMapping("/notify/unread/count")
     public AjaxResult unreadCount() {
         return success(notificationService.unreadCount());
+    }
+
+    /**
+     * 8. 手动触发预警扫描（任务卡契约端点 7.5）：全量三类扫描并返回本次新建 alert 数。
+     * Quartz cron 每天 08:00 自动跑，此处供冒烟/运维手动触发；仅 science_admin/admin。
+     */
+    @PreAuthorize("@ss.hasPermi('biz:alert:resolve') and @ss.hasAnyRoles('admin,science_admin')")
+    @Log(title = "预警扫描", businessType = BusinessType.OTHER)
+    @PostMapping("/scan")
+    @RepeatSubmit(interval = 5000, message = "扫描执行中，请勿重复提交")
+    public AjaxResult scan() {
+        return success(alertScanService.scanAll());
     }
 }

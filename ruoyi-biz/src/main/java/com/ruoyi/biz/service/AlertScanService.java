@@ -67,12 +67,16 @@ public class AlertScanService {
 
     /**
      * 全量扫描（D5）：合同节点 / 经费超限 / 资料逾期 三小方法，同事务。
+     *
+     * @return 本次扫描新建的 alert 数（幂等命中仅刷新 last_time 的不计入）
      */
     @Transactional(rollbackFor = Exception.class)
-    public void scanAll() {
-        scanContractNodes();
-        scanBudgetOverrun();
-        scanOverdueDocuments();
+    public int scanAll() {
+        int created = 0;
+        created += scanContractNodes();
+        created += scanBudgetOverrun();
+        created += scanOverdueDocuments();
+        return created;
     }
 
     // ========================================================
@@ -83,9 +87,12 @@ public class AlertScanService {
      * 扫描① 合同节点临近：node.status='PENDING' AND plan_date ∈ [today, today+15]
      * biz_key = CONTRACT:node:{node_id}，ref_type='CONTRACT'，title"合同节点临近"，
      * 通知课题 leader（contract→project→leader_id）。
+     *
+     * @return 本次新建的 alert 数
      */
     @Transactional(rollbackFor = Exception.class)
-    public void scanContractNodes() {
+    public int scanContractNodes() {
+        int created = 0;
         List<AlertScanCandidate> cands = alertMapper.selectContractNodeCandidates();
         for (AlertScanCandidate cand : cands) {
             if (cand == null || cand.getRefId() == null) {
@@ -95,17 +102,23 @@ public class AlertScanService {
             String title = "合同节点临近";
             String content = "合同[" + nz(cand.getContractName()) + "]节点[" + nz(cand.getNodeName())
                     + "]计划日期" + fmtDate(cand.getPlanDate()) + "临近，请及时办理";
-            upsertAlertAndNotify(cand, ALERT_TYPE_CONTRACT, REF_TYPE_CONTRACT, bizKey, title, content);
+            if (upsertAlertAndNotify(cand, ALERT_TYPE_CONTRACT, REF_TYPE_CONTRACT, bizKey, title, content)) {
+                created++;
+            }
         }
-        log.info("合同节点扫描完成：{} 条候选", cands.size());
+        log.info("合同节点扫描完成：{} 条候选，{} 条新建", cands.size(), created);
+        return created;
     }
 
     /**
      * 扫描② 经费超限：project.del_flag='0' AND (budget_balance ≤ 1000 OR (budget_total>0 AND balance/total ≤ 0.05))
      * biz_key = BUDGET:project:{project_id}，ref_type='PROJECT'，通知 project.leader_id。
+     *
+     * @return 本次新建的 alert 数
      */
     @Transactional(rollbackFor = Exception.class)
-    public void scanBudgetOverrun() {
+    public int scanBudgetOverrun() {
+        int created = 0;
         List<AlertScanCandidate> cands = alertMapper.selectBudgetOverrunCandidates();
         for (AlertScanCandidate cand : cands) {
             if (cand == null || cand.getRefId() == null) {
@@ -117,18 +130,24 @@ public class AlertScanService {
                     + "]余额 " + scale(nz(cand.getBudgetBalance())).toPlainString()
                     + " 元 / 预算 " + scale(nz(cand.getBudgetTotal())).toPlainString()
                     + " 元（余额过低，请及时处理）";
-            upsertAlertAndNotify(cand, ALERT_TYPE_BUDGET, REF_TYPE_PROJECT, bizKey, title, content);
+            if (upsertAlertAndNotify(cand, ALERT_TYPE_BUDGET, REF_TYPE_PROJECT, bizKey, title, content)) {
+                created++;
+            }
         }
-        log.info("经费超限扫描完成：{} 条候选", cands.size());
+        log.info("经费超限扫描完成：{} 条候选，{} 条新建", cands.size(), created);
+        return created;
     }
 
     /**
      * 扫描③ 资料逾期：project_document.del_flag='0' AND plan_submit_date &lt; today
      * AND (无 approval 或 approval.status='PENDING' 且 del_flag='0')
      * biz_key = DOCUMENT:doc:{doc_id}，ref_type='DOCUMENT'，通知 project.leader_id。
+     *
+     * @return 本次新建的 alert 数
      */
     @Transactional(rollbackFor = Exception.class)
-    public void scanOverdueDocuments() {
+    public int scanOverdueDocuments() {
+        int created = 0;
         List<AlertScanCandidate> cands = alertMapper.selectOverdueDocumentCandidates();
         for (AlertScanCandidate cand : cands) {
             if (cand == null || cand.getRefId() == null) {
@@ -139,9 +158,12 @@ public class AlertScanService {
             String content = "课题[" + nz(cand.getProjectNo()) + "/" + nz(cand.getProjectName())
                     + "]资料[" + nz(cand.getFileName()) + "]计划提交日期 "
                     + fmtDate(cand.getPlanSubmitDate()) + " 已逾期，请及时提交审批";
-            upsertAlertAndNotify(cand, ALERT_TYPE_DOCUMENT, REF_TYPE_DOCUMENT, bizKey, title, content);
+            if (upsertAlertAndNotify(cand, ALERT_TYPE_DOCUMENT, REF_TYPE_DOCUMENT, bizKey, title, content)) {
+                created++;
+            }
         }
-        log.info("资料逾期扫描完成：{} 条候选", cands.size());
+        log.info("资料逾期扫描完成：{} 条候选，{} 条新建", cands.size(), created);
+        return created;
     }
 
     // ========================================================
@@ -151,14 +173,16 @@ public class AlertScanService {
     /**
      * biz_key 幂等 upsert（D3）：同 biz_key 存在 OPEN 行 → 只更新 last_time（不新增、不重复通知）；
      * 否则查历史最大 round+1 INSERT 新 OPEN 行（first_time=last_time=now），随后派生通知。
+     *
+     * @return true=本次新建 alert（含通知派生）；false=幂等命中仅刷新 last_time
      */
-    private void upsertAlertAndNotify(AlertScanCandidate cand, String alertType, String refType,
-                                      String bizKey, String title, String content) {
+    private boolean upsertAlertAndNotify(AlertScanCandidate cand, String alertType, String refType,
+                                         String bizKey, String title, String content) {
         Alert existing = alertMapper.selectOpenByBizKey(bizKey);
         if (existing != null) {
             // D3：命中未消除行，仅刷新 last_time
             alertMapper.updateLastTime(existing.getAlertId(), new Date(), SCAN_OPERATOR);
-            return;
+            return false;
         }
         Integer maxRound = alertMapper.selectMaxRoundByBizKey(bizKey);
         int round = (maxRound == null ? 0 : maxRound) + 1;
@@ -182,6 +206,7 @@ public class AlertScanService {
 
         // D6 通知派生（复用扫描候选中的 project.leader_id）
         deriveNotifications(alert.getAlertId(), cand.getLeaderId());
+        return true;
     }
 
     /**
