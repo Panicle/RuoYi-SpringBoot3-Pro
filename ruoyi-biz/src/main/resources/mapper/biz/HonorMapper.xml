@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.HonorMapper">
+
+    <resultMap type="Honor" id="HonorResult">
+        <id     property="honorId"        column="honor_id"        />
+        <result property="honorName"      column="honor_name"      />
+        <result property="honorType"      column="honor_type"      />
+        <result property="awardDate"      column="award_date"      />
+        <result property="awardLevel"     column="award_level"     />
+        <result property="awardOrg"       column="award_org"       />
+        <result property="description"    column="description"     />
+        <result property="delFlag"        column="del_flag"        />
+        <result property="createBy"       column="create_by"       />
+        <result property="createTime"     column="create_time"     />
+        <result property="updateBy"       column="update_by"       />
+        <result property="updateTime"     column="update_time"     />
+        <result property="remark"         column="remark"          />
+        <result property="certificateNo"  column="certificate_no"  />
+        <result property="certificateUrl" column="certificate_url" />
+    </resultMap>
+
+    <!-- 数据范围联接（@DataScope deptAlias=d / userAlias=u）：
+         d = sys_dept、u = sys_user 两个别名专供数据权限使用，不得被业务表占用。
+         注入片段在 EXISTS 子查询内，无关联荣誉对全所角色也命中（params.dataScope 为空时不拼接 EXISTS）。 -->
+    <sql id="selectHonorVo">
+        select h.honor_id, h.honor_name, h.honor_type, h.award_date, h.award_level,
+               h.award_org, h.description, h.del_flag,
+               h.create_by, h.create_time, h.update_by, h.update_time, h.remark,
+               h.certificate_no, h.certificate_url
+        from honor h
+    </sql>
+
+    <!-- 列表公共筛选：honorName(like) / honorType / awardLevel / awardDate 区间（照 ExpenseMapper 惯例走 params） -->
+    <sql id="honorFilters">
+        <if test="honorName != null and honorName != ''"> and h.honor_name like concat(concat('%', #{honorName}), '%') </if>
+        <if test="honorType != null and honorType != ''"> and h.honor_type = #{honorType} </if>
+        <if test="awardLevel != null and awardLevel != ''"> and h.award_level = #{awardLevel} </if>
+        <if test="params.beginAwardDate != null and params.beginAwardDate != ''">
+            and to_char(h.award_date, 'yyyy-MM-dd') <![CDATA[ >= ]]> #{params.beginAwardDate}
+        </if>
+        <if test="params.endAwardDate != null and params.endAwardDate != ''">
+            and to_char(h.award_date, 'yyyy-MM-dd') <![CDATA[ <= ]]> #{params.endAwardDate}
+        </if>
+    </sql>
+
+    <!-- 列表：@DataScope 通道；researcher 不调用此方法。
+         ${params.dataScope} 为空串（全所角色/admin）时整个 EXISTS 不拼接 — 否则无关联荣誉对全所角色也消失。 -->
+    <select id="selectHonorList" parameterType="Honor" resultMap="HonorResult">
+        <include refid="selectHonorVo"/>
+        <where>
+            h.del_flag = '0'
+            <include refid="honorFilters"/>
+            <if test="params.dataScope != null and params.dataScope != ''">
+                and exists (
+                    select 1 from honor_relation hr
+                    left join project p   on hr.ref_type='PROJECT'    and hr.ref_id = p.project_id and p.del_flag='0'
+                    left join sys_user su on hr.ref_type='RESEARCHER' and hr.ref_id = su.user_id
+                    left join sys_dept d  on d.dept_id = coalesce(p.dept_id, su.dept_id)
+                    left join sys_user u  on u.user_id = p.leader_id
+                    where hr.honor_id = h.honor_id and hr.del_flag='0'
+                    ${params.dataScope}
+                )
+            </if>
+        </where>
+        order by h.honor_id desc
+    </select>
+
+    <!-- researcher 列表（本人相关）：本人作为人员 OR 所在课题 出现在有效关联中 -->
+    <select id="selectHonorListForResearcher" parameterType="Honor" resultMap="HonorResult">
+        <include refid="selectHonorVo"/>
+        <where>
+            h.del_flag = '0'
+            <include refid="honorFilters"/>
+            and (
+              exists (select 1 from honor_relation hr where hr.honor_id = h.honor_id and hr.del_flag='0'
+                      and hr.ref_type='RESEARCHER' and hr.ref_id = #{params.selfUserId})
+              or exists (select 1 from honor_relation hr join project p on hr.ref_id = p.project_id and p.del_flag='0'
+                      where hr.honor_id = h.honor_id and hr.del_flag='0' and hr.ref_type='PROJECT'
+                      and (p.leader_id = #{params.selfUserId}
+                           or exists (select 1 from project_member m where m.project_id = p.project_id
+                                      and m.user_id = #{params.selfUserId} and m.del_flag='0')))
+            )
+        </where>
+        order by h.honor_id desc
+    </select>
+
+    <!-- 详情：@DataScope 通道（其他角色走数据范围；researcher 走 selectHonorByIdForResearcher 专用分支，不走此方法） -->
+    <select id="selectHonorById" parameterType="Honor" resultMap="HonorResult">
+        <include refid="selectHonorVo"/>
+        <where>
+            h.del_flag = '0' and h.honor_id = #{honorId}
+            <if test="params != null and params.dataScope != null and params.dataScope != ''">
+                and exists (
+                    select 1 from honor_relation hr
+                    left join project p   on hr.ref_type='PROJECT'    and hr.ref_id = p.project_id and p.del_flag='0'
+                    left join sys_user su on hr.ref_type='RESEARCHER' and hr.ref_id = su.user_id
+                    left join sys_dept d  on d.dept_id = coalesce(p.dept_id, su.dept_id)
+                    left join sys_user u  on u.user_id = p.leader_id
+                    where hr.honor_id = h.honor_id and hr.del_flag='0'
+                    ${params.dataScope}
+                )
+            </if>
+        </where>
+    </select>
+
+    <!-- researcher 详情：按 id 查本人相关（无关联/不在本人范围返回 null，Service 抛"无权访问"） -->
+    <select id="selectHonorByIdForResearcher" resultMap="HonorResult">
+        <include refid="selectHonorVo"/>
+        where h.del_flag = '0' and h.honor_id = #{honorId}
+          and (
+            exists (select 1 from honor_relation hr where hr.honor_id = h.honor_id and hr.del_flag='0'
+                    and hr.ref_type='RESEARCHER' and hr.ref_id = #{selfUserId})
+            or exists (select 1 from honor_relation hr join project p on hr.ref_id = p.project_id and p.del_flag='0'
+                    where hr.honor_id = h.honor_id and hr.del_flag='0' and hr.ref_type='PROJECT'
+                    and (p.leader_id = #{selfUserId}
+                         or exists (select 1 from project_member m where m.project_id = p.project_id
+                                    and m.user_id = #{selfUserId} and m.del_flag='0')))
+          )
+    </select>
+
+    <!-- 逻辑删除单条荣誉（XML 显式 del_flag='0' 条件 + sysdate，三层保险之一；关联级联软删由 Service 同事务调用 HonorRelationMapper） -->
+    <update id="softDeleteByHonorId">
+        update honor
+        set del_flag    = '2',
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where honor_id  = #{honorId}
+          and del_flag  = '0'
+    </update>
+</mapper>

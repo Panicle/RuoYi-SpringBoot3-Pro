@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.HonorRelationMapper">
+
+    <resultMap type="HonorRelation" id="HonorRelationResult">
+        <id     property="relationId"        column="relation_id"        />
+        <result property="honorId"           column="honor_id"           />
+        <result property="refType"           column="ref_type"           />
+        <result property="refId"             column="ref_id"             />
+        <result property="delFlag"           column="del_flag"           />
+        <result property="createBy"          column="create_by"          />
+        <result property="createTime"        column="create_time"        />
+        <result property="updateBy"          column="update_by"          />
+        <result property="updateTime"        column="update_time"        />
+        <result property="remark"            column="remark"             />
+        <result property="roleDesc"          column="role_desc"          />
+        <result property="contributionDesc"  column="contribution_desc"  />
+        <!-- 视图关联字段（来自 project/sys_user/cooperative_unit JOIN） -->
+        <result property="refName"           column="ref_name"           />
+    </resultMap>
+
+    <!--
+        三表 LEFT JOIN 解析 refName：
+        PROJECT → p.project_no || ' ' || p.project_name（CONCAT 兼容达梦/PG/高斯）
+        RESEARCHER → su.nick_name
+        UNIT → cu.unit_name
+        ref_type 与 LEFT JOIN 条件强绑定，其余表 NULL 折叠。
+    -->
+    <sql id="selectRelationVo">
+        select hr.relation_id, hr.honor_id, hr.ref_type, hr.ref_id, hr.del_flag,
+               hr.create_by, hr.create_time, hr.update_by, hr.update_time, hr.remark,
+               hr.role_desc, hr.contribution_desc,
+               case hr.ref_type
+                   when 'PROJECT'    then concat(concat(p.project_no, ' '), p.project_name)
+                   when 'RESEARCHER' then su.nick_name
+                   when 'UNIT'       then cu.unit_name
+                   else null
+               end as ref_name
+        from honor_relation hr
+        left join project p          on hr.ref_type = 'PROJECT'    and hr.ref_id = p.project_id and p.del_flag = '0'
+        left join sys_user su        on hr.ref_type = 'RESEARCHER' and hr.ref_id = su.user_id
+        left join cooperative_unit cu on hr.ref_type = 'UNIT'       and hr.ref_id = cu.unit_id  and cu.del_flag = '0'
+    </sql>
+
+    <!-- 按 honorId 查询关联列表（仅有效行 del_flag='0'，按 relation_id asc） -->
+    <select id="selectRelationListByHonorId" parameterType="Long" resultMap="HonorRelationResult">
+        <include refid="selectRelationVo"/>
+        where hr.del_flag = '0' and hr.honor_id = #{honorId}
+        order by hr.relation_id asc
+    </select>
+
+    <!-- 查重：同 honor_id + ref_type + ref_id 有效行计数（>0 即视为已存在；走 @TableLogic 之外显式 del_flag='0'） -->
+    <select id="countActiveRelation" resultType="int">
+        select count(1)
+        from honor_relation
+        where honor_id = #{honorId}
+          and ref_type = #{refType}
+          and ref_id   = #{refId}
+          and del_flag = '0'
+    </select>
+
+    <!-- 逻辑删除单条关联（XML 显式 del_flag='0' 条件 + sysdate，三层保险之一） -->
+    <update id="softDeleteByRelationId">
+        update honor_relation
+        set del_flag    = '2',
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where relation_id = #{relationId}
+          and del_flag    = '0'
+    </update>
+
+    <!-- 级联软删：按 honorId 删除该荣誉全部有效关联（删荣誉时同事务调用） -->
+    <update id="softDeleteByHonorId">
+        update honor_relation
+        set del_flag    = '2',
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where honor_id  = #{honorId}
+          and del_flag  = '0'
+    </update>
+</mapper>
