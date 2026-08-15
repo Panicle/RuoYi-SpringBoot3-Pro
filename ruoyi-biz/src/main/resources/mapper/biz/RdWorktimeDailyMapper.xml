@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.RdWorktimeDailyMapper">
+
+    <resultMap type="RdWorktimeDaily" id="RdWorktimeDailyResult">
+        <id     property="id"           column="id"            />
+        <result property="projectId"    column="project_id"    />
+        <result property="researcherId" column="researcher_id" />
+        <result property="workDate"     column="work_date"     />
+        <result property="rdHours"      column="rd_hours"      />
+        <result property="delFlag"      column="del_flag"      />
+        <result property="createBy"     column="create_by"     />
+        <result property="createTime"   column="create_time"   />
+        <result property="updateBy"     column="update_by"     />
+        <result property="updateTime"   column="update_time"   />
+        <result property="remark"       column="remark"        />
+    </resultMap>
+
+    <sql id="selectRdWorktimeDailyVo">
+        select id, project_id, researcher_id, work_date, rd_hours, del_flag,
+               create_by, create_time, update_by, update_time, remark
+        from rd_worktime_daily
+    </sql>
+
+    <!-- 同键 upsert 查重：(projectId, researcherId, workDate) -->
+    <select id="selectByProjectResearcherDate" resultMap="RdWorktimeDailyResult">
+        <include refid="selectRdWorktimeDailyVo"/>
+        where project_id    = #{projectId}
+          and researcher_id = #{researcherId}
+          and work_date     = #{workDate}
+          and del_flag      = '0'
+    </select>
+
+    <!-- 跨课题同日合计校验（task brief D9）：按 (researcherId, workDate) 查全部有效行 -->
+    <select id="selectByResearcherAndDate" resultMap="RdWorktimeDailyResult">
+        <include refid="selectRdWorktimeDailyVo"/>
+        where researcher_id = #{researcherId}
+          and work_date     = #{workDate}
+          and del_flag      = '0'
+    </select>
+
+    <!-- 按 (projectId, researcherId, month) 查有效日行 — 复制上月与月汇总重算使用 -->
+    <select id="selectByProjectResearcherMonth" resultMap="RdWorktimeDailyResult">
+        <include refid="selectRdWorktimeDailyVo"/>
+        where project_id    = #{projectId}
+          and researcher_id = #{researcherId}
+          and to_char(work_date, 'yyyy-MM') = #{monthPrefix}
+          and del_flag      = '0'
+        order by work_date
+    </select>
+
+    <!-- 月汇总 total_rd_hours：SUM(rd_hours) 按 (projectId, researcherId, month) -->
+    <select id="sumRdHoursByProjectResearcherMonth" resultType="java.math.BigDecimal">
+        select nvl(sum(rd_hours), 0)
+        from rd_worktime_daily
+        where project_id    = #{projectId}
+          and researcher_id = #{researcherId}
+          and to_char(work_date, 'yyyy-MM') = #{monthPrefix}
+          and del_flag      = '0'
+    </select>
+
+    <!-- 月汇总 cumulative_hours：SUM(rd_hours) WHERE project_id=? AND researcher_id=? AND month <= ? -->
+    <select id="sumCumulativeHours" resultType="java.math.BigDecimal">
+        select nvl(sum(rd_hours), 0)
+        from rd_worktime_daily
+        where project_id    = #{projectId}
+          and researcher_id = #{researcherId}
+          and to_char(work_date, 'yyyy-MM') <![CDATA[ <= ]]> #{monthEndInclusive}
+          and del_flag      = '0'
+    </select>
+</mapper>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.RdResearcherSalaryMapper">
+
+    <resultMap type="RdResearcherSalary" id="RdResearcherSalaryResult">
+        <id     property="salaryId"      column="salary_id"      />
+        <result property="researcherId"  column="researcher_id"  />
+        <result property="salaryMonth"   column="salary_month"   />
+        <result property="monthlySalary" column="monthly_salary" />
+        <result property="delFlag"       column="del_flag"       />
+        <result property="createBy"      column="create_by"      />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"      column="update_by"      />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"        column="remark"         />
+        <result property="researcherName" column="researcher_name" />
+    </resultMap>
+
+    <!-- 数据范围联接（@DataScope deptAlias=d / userAlias=u）：
+         d = sys_dept（取 su.dept_id）、u = sys_user（取 su.user_id 别名）。
+         u2 = sys_user（取 researcherName）；别名 d/u 专供数据权限使用，不得被业务表占用。 -->
+    <sql id="selectRdResearcherSalaryVo">
+        select s.salary_id, s.researcher_id, s.salary_month, s.monthly_salary, s.del_flag,
+               s.create_by, s.create_time, s.update_by, s.update_time, s.remark,
+               u2.nick_name as researcher_name
+        from rd_researcher_salary s
+        join sys_user u2 on s.researcher_id = u2.user_id
+        left join sys_dept d on u2.dept_id = d.dept_id
+        left join sys_user u  on u.user_id  = u2.user_id
+    </sql>
+
+    <!-- 列表公共筛选（salaryMonth / researcherId） -->
+    <sql id="rdResearcherSalaryFilters">
+        <if test="salaryMonth != null and salaryMonth != ''"> and s.salary_month = #{salaryMonth} </if>
+        <if test="researcherId != null"> and s.researcher_id = #{researcherId} </if>
+    </sql>
+
+    <!-- 列表：@DataScope 通道（deptAlias=d, userAlias=u），researcher 不调用此方法 -->
+    <select id="selectRdResearcherSalaryList" parameterType="RdResearcherSalary" resultMap="RdResearcherSalaryResult">
+        <include refid="selectRdResearcherSalaryVo"/>
+        <where>
+            s.del_flag = '0' and u2.del_flag = '0'
+            <include refid="rdResearcherSalaryFilters"/>
+            ${params.dataScope}
+        </where>
+        order by s.salary_month desc, s.salary_id desc
+    </select>
+
+    <!-- researcher 列表（本人相关）：WHERE researcher_id = selfUserId -->
+    <select id="selectRdResearcherSalaryListForResearcher" parameterType="RdResearcherSalary" resultMap="RdResearcherSalaryResult">
+        <include refid="selectRdResearcherSalaryVo"/>
+        <where>
+            s.del_flag = '0' and u2.del_flag = '0'
+            <include refid="rdResearcherSalaryFilters"/>
+            and s.researcher_id = #{params.selfUserId}
+        </where>
+        order by s.salary_month desc, s.salary_id desc
+    </select>
+
+    <!-- 查重：(researcherId, salaryMonth) DB 无唯一索引，应用层查重 -->
+    <select id="selectByResearcherAndMonth" resultMap="RdResearcherSalaryResult">
+        <include refid="selectRdResearcherSalaryVo"/>
+        where s.del_flag = '0'
+          and s.researcher_id = #{researcherId}
+          and s.salary_month  = #{salaryMonth}
+    </select>
+</mapper>

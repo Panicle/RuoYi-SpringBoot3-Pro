@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.RdLaborAllocationMapper">
+
+    <resultMap type="RdLaborAllocation" id="RdLaborAllocationResult">
+        <id     property="allocId"         column="alloc_id"         />
+        <result property="projectId"       column="project_id"       />
+        <result property="researcherId"    column="researcher_id"    />
+        <result property="month"           column="month"            />
+        <result property="allocatedAmount" column="allocated_amount" />
+        <result property="surchargeTotal"  column="surcharge_total"  />
+        <result property="grandTotal"      column="grand_total"      />
+        <result property="status"          column="status"           />
+        <result property="batchNo"         column="batch_no"         />
+        <result property="delFlag"         column="del_flag"         />
+        <result property="createBy"        column="create_by"        />
+        <result property="createTime"      column="create_time"      />
+        <result property="updateBy"        column="update_by"        />
+        <result property="updateTime"      column="update_time"      />
+        <result property="remark"          column="remark"           />
+        <result property="monthlyHours"    column="monthly_hours"    />
+        <result property="hourlyRate"      column="hourly_rate"      />
+        <result property="surchargeDetail" column="surcharge_detail" />
+        <result property="confirmBy"       column="confirm_by"       />
+        <result property="confirmTime"     column="confirm_time"     />
+        <result property="researcherName"  column="researcher_name"  />
+    </resultMap>
+
+    <sql id="selectRdLaborAllocationVo">
+        select a.alloc_id, a.project_id, a.researcher_id, a.month,
+               a.allocated_amount, a.surcharge_total, a.grand_total, a.status, a.batch_no, a.del_flag,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
+               a.monthly_hours, a.hourly_rate, a.surcharge_detail, a.confirm_by, a.confirm_time,
+               u.nick_name as researcher_name
+        from rd_labor_allocation a
+        left join sys_user u on a.researcher_id = u.user_id
+    </sql>
+
+    <!-- 按 (projectId, month) 查有效分摊行 — 骨架查询 -->
+    <select id="selectByProjectAndMonth" resultMap="RdLaborAllocationResult">
+        <include refid="selectRdLaborAllocationVo"/>
+        where a.project_id = #{projectId}
+          and a.month      = #{month}
+          and a.del_flag   = '0'
+        order by a.researcher_id
+    </select>
+
+    <!-- CONFIRMED 计数（monthStr 通道：month 列是 VARCHAR 'YYYY-MM'，调用处把 Integer month 拼成
+         'YYYY-MM' 传进来做字符串等值；达梦不支持对 VARCHAR 列 to_char/to_number，删除避免运行时转错） -->
+    <select id="countConfirmedByProjectAndMonthInt" resultType="java.lang.Integer">
+        select count(1) from rd_labor_allocation
+         where project_id = #{projectId}
+           and month      = #{monthStr}
+           and status     = 'CONFIRMED'
+           and del_flag   = '0'
+    </select>
+
+    <!-- 多课题×年聚合 Σalloc/Σsurcharge/Σgrand（端点 18 导出汇总用）
+         汇总口径=已确认批次（status='CONFIRMED'），与批次看板 SUM 口径一致。fix I3。 -->
+    <select id="aggregateByProjectsYear" resultType="com.ruoyi.biz.domain.vo.RdAllocSummaryRow">
+        select project_id    as projectId,
+               month         as month,
+               sum(allocated_amount) as sumAlloc,
+               sum(surcharge_total)  as sumSurcharge,
+               sum(grand_total)      as sumGrand
+          from rd_labor_allocation
+         where del_flag = '0'
+           and status   = 'CONFIRMED'
+           and project_id in
+           <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
+               #{pid}
+           </foreach>
+           and month >= concat(#{year}, '-01')
+           and month &lt;= concat(#{year}, '-12')
+         group by project_id, month
+         order by project_id, month
+    </select>
+</mapper>
