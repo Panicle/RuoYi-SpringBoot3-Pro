@@ -1,10 +1,12 @@
 package com.ruoyi.biz.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.biz.domain.Alert;
 import com.ruoyi.biz.domain.Notification;
 import com.ruoyi.biz.domain.vo.AlertScanCandidate;
 import com.ruoyi.biz.mapper.AlertMapper;
 import com.ruoyi.biz.mapper.NotificationMapper;
+import com.ruoyi.biz.websocket.PetWsEndpoint;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,8 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -64,6 +68,8 @@ public class AlertScanService {
 
     private final AlertMapper alertMapper;
     private final NotificationMapper notificationMapper;
+    private final PetWsEndpoint petWsEndpoint;
+    private final ObjectMapper objectMapper;
 
     /**
      * 全量扫描（D5）：合同节点 / 经费超限 / 资料逾期 三小方法，同事务。
@@ -204,16 +210,17 @@ public class AlertScanService {
         alert.setCreateBy(SCAN_OPERATOR);
         alertMapper.insert(alert);
 
-        // D6 通知派生（复用扫描候选中的 project.leader_id）
-        deriveNotifications(alert.getAlertId(), cand.getLeaderId());
+        // D6 通知派生（复用扫描候选中的 project.leader_id）+ D9 推送接线（通知落库后逐接收人推送）
+        deriveNotifications(alert, cand.getLeaderId());
         return true;
     }
 
     /**
      * 通知接收人派生（D6）：{project.leader_id} ∪ {全部 science_admin(role_key) + admin(user_id=1)}，
-     * 按 (alert_id, receiver_id) 应用层查重（已存在则不重复 INSERT），status='UNREAD'。
+     * 按 (alert_id, receiver_id) 应用层查重（已存在则不重复 INSERT），status='UNREAD'；
+     * 每条通知落库后按 receiver_id 向 WebSocket 推送未读提醒（D9 接线，静默容错不阻断落库）。
      */
-    private void deriveNotifications(Long alertId, Long projectLeaderId) {
+    private void deriveNotifications(Alert alert, Long projectLeaderId) {
         Set<Long> receivers = new LinkedHashSet<>();
         if (projectLeaderId != null) {
             receivers.add(projectLeaderId);
@@ -223,17 +230,37 @@ public class AlertScanService {
             if (receiverId == null) {
                 continue;
             }
-            if (notificationMapper.countByAlertAndReceiver(alertId, receiverId) > 0) {
+            if (notificationMapper.countByAlertAndReceiver(alert.getAlertId(), receiverId) > 0) {
                 continue;   // 应用层查重
             }
             Notification n = new Notification();
-            n.setAlertId(alertId);
+            n.setAlertId(alert.getAlertId());
             n.setReceiverId(receiverId);
             n.setStatus(NOTIFY_STATUS_UNREAD);
             n.setIsRead(0);
             n.setDelFlag("0");
             n.setCreateBy(SCAN_OPERATOR);
             notificationMapper.insert(n);
+            // D9 预警推送接线：通知落库后向接收人推送未读提醒（推送失败不阻断）
+            pushAlertPayload(alert, receiverId);
+        }
+    }
+
+    /**
+     * 预警 WebSocket 推送（D9 接线）：构造 {alertId,title,content,alertType,alertLevel} JSON 文本，
+     * 调 {@link PetWsEndpoint#pushToUser}。静默容错：无在线连接（返回 0）或任何异常均不阻断通知落库，仅记日志。
+     */
+    private void pushAlertPayload(Alert alert, Long receiverId) {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("alertId", alert.getAlertId());
+            payload.put("title", alert.getTitle());
+            payload.put("content", alert.getContent());
+            payload.put("alertType", alert.getAlertType());
+            payload.put("alertLevel", alert.getAlertLevel());
+            petWsEndpoint.pushToUser(receiverId, objectMapper.writeValueAsString(payload));
+        } catch (Exception e) {
+            log.warn("预警推送失败 alertId={}, receiverId={}: {}", alert.getAlertId(), receiverId, e.getMessage());
         }
     }
 
