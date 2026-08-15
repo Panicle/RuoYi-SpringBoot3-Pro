@@ -25,7 +25,7 @@ public interface RdLaborBudgetMapper extends BaseMapper<RdLaborBudget> {
                                               @Param("budgetYear") Integer budgetYear);
 
     /**
-     * 按 (projectId, budgetYear, month) 查有效单行（唯一索引 idx_rd_labor_budget_year_month 兜底）。
+     * 按 (projectId, budgetYear, month) 查有效单行（DB 无唯一索引，应用层查重）。
      * 增量 upsert 用：Service 先查后写。
      */
     RdLaborBudget selectByProjectYearMonth(@Param("projectId") Long projectId,

@@ -19,7 +19,7 @@ import java.math.BigDecimal;
  * create_by/create_time/update_by/update_time/remark）。salaryMonth 格式 'YYYY-MM'（VARCHAR(7)）；
  * 非表字段 researcherName 用于列表 JOIN sys_user 展示。</p>
  *
- * <p>唯一索引 idx_rd_researcher_salary_uk(researcher_id, salary_month) 保证一对一月；
+ * <p>DB 无唯一索引，同键唯一由应用层查重保证（save 端点）；
  * save 端点应用层查重（任务卡 D9），命中则 UPDATE，否则 INSERT。</p>
  *
  * <p>researcher_id = sys_user.user_id（任务卡 D2）；金额一律 BigDecimal，2 位小数 HALF_UP（决策 D9）。</p>

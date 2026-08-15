@@ -39,7 +39,7 @@ public interface RdResearcherSalaryMapper extends BaseMapper<RdResearcherSalary>
 
     /**
      * 按 (researcherId, salaryMonth) 查有效单行
-     * （DB 唯一索引 idx_rd_researcher_salary_uk 兜底，应用层查重）。
+     * （DB 无唯一索引，应用层查重）。
      */
     RdResearcherSalary selectByResearcherAndMonth(@Param("researcherId") Long researcherId,
                                                  @Param("salaryMonth") String salaryMonth);

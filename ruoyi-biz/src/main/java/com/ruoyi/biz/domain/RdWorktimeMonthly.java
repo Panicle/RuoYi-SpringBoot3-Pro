@@ -20,7 +20,7 @@ import java.math.BigDecimal;
  * total_rd_hours = 该 project+researcher+month 当月每日有效工时合计；cumulative_hours =
  * 该 project+researcher 自最早记录至当月的累计（任务卡 D9 月汇总重算）。</p>
  *
- * <p>唯一索引 idx_rd_worktime_monthly_uk(project_id, researcher_id, month) 保证一对一，
+ * <p>DB 无唯一索引，同键唯一由应用层查重保证；
  * 保存/复制工时同日同事务 UPSERT 该行（任务卡 D9）。</p>
  *
  * <p>非表字段 researcherName/projectNo/projectName 用于列表 JOIN 展示。</p>

@@ -19,7 +19,7 @@ import java.util.List;
 public interface RdWorktimeMonthlyMapper extends BaseMapper<RdWorktimeMonthly> {
 
     /**
-     * 按 (projectId, researcherId, month) 查有效汇总行（唯一索引 idx_rd_worktime_monthly_uk 兜底）。
+     * 按 (projectId, researcherId, month) 查有效汇总行（DB 无唯一索引，应用层查重）。
      */
     RdWorktimeMonthly selectByProjectResearcherMonth(@Param("projectId") Long projectId,
                                                      @Param("researcherId") Long researcherId,

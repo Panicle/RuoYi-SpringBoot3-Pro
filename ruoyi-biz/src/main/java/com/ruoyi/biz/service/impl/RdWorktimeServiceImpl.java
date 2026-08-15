@@ -11,6 +11,7 @@ import com.ruoyi.biz.mapper.ProjectMemberMapper;
 import com.ruoyi.biz.mapper.ProjectMapper;
 import com.ruoyi.biz.mapper.RdWorktimeDailyMapper;
 import com.ruoyi.biz.mapper.RdWorktimeMonthlyMapper;
+import com.ruoyi.biz.service.IProjectService;
 import com.ruoyi.biz.service.IRdWorktimeService;
 import com.ruoyi.common.core.domain.entity.SysRole;
 import com.ruoyi.common.exception.ServiceException;
@@ -66,6 +67,7 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final SysUserMapper sysUserMapper;
+    private final IProjectService projectService;
 
     // ========================================================
     //  日历（端点 7）
@@ -87,9 +89,8 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
                 throw new ServiceException("无权查看他人工时");
             }
         }
-        // 项目存在性校验（轻量；不强制 scoped — researcher 已在 selfUserId 校验过；
-        //   其他角色：调用方已限定到本人相关/本室/全所语义）
-        Project p = projectMapper.selectProjectById(projectId);
+        // 项目存在性校验 — 走 scoped 闸门（researcher 本人相关 / 其他角色走数据范围，过期/无权 → 抛"无权访问"）
+        Project p = projectService.selectProjectById(projectId);
         if (p == null || !"0".equals(p.getDelFlag())) {
             throw new ServiceException("课题不存在");
         }
@@ -156,7 +157,7 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
             throw new ServiceException("month 格式必须为 YYYY-MM");
         }
         // 1. scoped 闸门 + ARCHIVED 拒
-        Project project = projectMapper.selectProjectById(projectId);
+        Project project = projectService.selectProjectById(projectId);
         if (project == null || !"0".equals(project.getDelFlag())) {
             throw new ServiceException("课题不存在");
         }
@@ -271,7 +272,7 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
             throw new ServiceException("month 格式必须为 YYYY-MM");
         }
         // scoped 闸门 + ARCHIVED 拒 + researcher 本人校验（复用 save 同套）
-        Project project = projectMapper.selectProjectById(projectId);
+        Project project = projectService.selectProjectById(projectId);
         if (project == null || !"0".equals(project.getDelFlag())) {
             throw new ServiceException("课题不存在");
         }
@@ -403,7 +404,8 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
     }
 
     /**
-     * researcher 在该 (projectId, userId) 是否为 leader 或有效 member（任务卡 D9）。
+     * researcher 在该 (projectId, userId) 是否为 leader 或任意有效 project_member（任务卡 D9）。
+     * 不限定 role：HOST/PARTICIPANT 均视为有效参与人，del_flag='0' 唯一约束即可。
      */
     private boolean isProjectMemberForResearcher(Long projectId, Long userId) {
         Project p = projectMapper.selectProjectById(projectId);
@@ -414,7 +416,7 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
             return true;
         }
         ProjectMember m = projectMemberMapper.selectMemberByUser(projectId, userId);
-        return m != null && MEMBER_HOST.equalsIgnoreCase(m.getRole());
+        return m != null;
     }
 
     /** 角色判定（照 ProjectServiceImpl.java:672-696 风格） */

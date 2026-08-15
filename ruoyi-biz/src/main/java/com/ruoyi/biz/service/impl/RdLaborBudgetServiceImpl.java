@@ -149,13 +149,12 @@ public class RdLaborBudgetServiceImpl implements IRdLaborBudgetService {
                 try {
                     rdLaborBudgetMapper.insert(ins);
                 } catch (DuplicateKeyException e) {
-                    // 极端：物理冲突（DB 唯一索引 idx_rd_labor_budget_year_month 兜底）
+                    // 极端：物理冲突（DB 无唯一索引，应用层查重）
                     throw new ServiceException("该月预算已存在");
                 }
             } else {
-                // 有行 → UPDATE（amount 不变也走 UPDATE，DB 零成本）
+                // 有行 → UPDATE（amount 不变也走 UPDATE，DB 零成本；保留原 status 不动）
                 db.setTotalAmount(amount);
-                db.setStatus("DRAFT");
                 db.setUpdateBy(operName);
                 rdLaborBudgetMapper.updateById(db);
             }

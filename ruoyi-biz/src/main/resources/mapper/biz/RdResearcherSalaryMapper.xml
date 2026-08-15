@@ -57,7 +57,7 @@
         order by s.salary_month desc, s.salary_id desc
     </select>
 
-    <!-- 查重：(researcherId, salaryMonth) 唯一索引 idx_rd_researcher_salary_uk 兜底 -->
+    <!-- 查重：(researcherId, salaryMonth) DB 无唯一索引，应用层查重 -->
     <select id="selectByResearcherAndMonth" resultMap="RdResearcherSalaryResult">
         <include refid="selectRdResearcherSalaryVo"/>
         where s.del_flag = '0'

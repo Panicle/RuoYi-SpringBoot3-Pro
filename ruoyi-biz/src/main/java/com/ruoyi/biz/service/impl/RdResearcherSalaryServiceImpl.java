@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
  *
  * <p>数据权限照 ExpenseServiceImpl/HonorServiceImpl 双通道：列表走 @DataScope 注解，
  * researcher 走"本人相关"专用 SQL；导入/导出复用列表同通道。save 按
- * (researcherId, salaryMonth) 应用层查重 upsert（DB 唯一索引 idx_rd_researcher_salary_uk 兜底）。</p>
+ * (researcherId, salaryMonth) 应用层查重 upsert（DB 无唯一索引）。</p>
  *
  * <p>任务卡 D11：researcher 角色访问 /salary/list 直接拒（Service 兜底）—— 即使菜单
  * 串已挂 admin/science_admin/leader/labor_hr/researcher（researcher 应无 list 串，
@@ -92,7 +92,7 @@ public class RdResearcherSalaryServiceImpl implements IRdResearcherSalaryService
             throw new ServiceException("研发人员不存在");
         }
 
-        // 应用层查重 upsert（DB 唯一索引 idx_rd_researcher_salary_uk 兜底）
+        // 应用层查重 upsert（DB 无唯一索引）
         RdResearcherSalary db = rdResearcherSalaryMapper.selectByResearcherAndMonth(
                 salary.getResearcherId(), salary.getSalaryMonth());
         salary.setMonthlySalary(amount);
