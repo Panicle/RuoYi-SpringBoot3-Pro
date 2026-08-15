@@ -4,17 +4,17 @@ import com.ruoyi.biz.domain.CooperativeUnit;
 import com.ruoyi.biz.domain.Honor;
 import com.ruoyi.biz.domain.HonorRelation;
 import com.ruoyi.biz.domain.Project;
-import com.ruoyi.biz.domain.ProjectMember;
 import com.ruoyi.biz.mapper.CooperativeUnitMapper;
 import com.ruoyi.biz.mapper.HonorMapper;
 import com.ruoyi.biz.mapper.HonorRelationMapper;
 import com.ruoyi.biz.mapper.ProjectMapper;
-import com.ruoyi.biz.mapper.ProjectMemberMapper;
 import com.ruoyi.biz.service.IHonorService;
 import com.ruoyi.common.core.domain.entity.SysRole;
+import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,7 +54,7 @@ public class HonorServiceImpl implements IHonorService {
     private final HonorMapper honorMapper;
     private final HonorRelationMapper honorRelationMapper;
     private final ProjectMapper projectMapper;
-    private final ProjectMemberMapper projectMemberMapper;
+    private final SysUserMapper sysUserMapper;
     private final CooperativeUnitMapper cooperativeUnitMapper;
 
     // ========================================================
@@ -255,12 +255,11 @@ public class HonorServiceImpl implements IHonorService {
             return;
         }
         if (REF_TYPE_RESEARCHER.equals(refType)) {
-            // D2：ref_id = sys_user.user_id；通过 project_member 表存在一条未删成员行即视为该人员存在
-            ProjectMember q = new ProjectMember();
-            q.setUserId(refId);
-            List<ProjectMember> members = projectMemberMapper.selectMemberList(q);
-            if (members == null || members.isEmpty()) {
-                throw new ServiceException("关联人员不存在或未参与任何课题");
+            // D2：ref_id = sys_user.user_id；直查 sys_user 存在即视为有效。
+            // 禁用账号不拦——历史荣誉可关联离职/禁用人员（审查 M2 留档）。
+            SysUser u = sysUserMapper.selectUserById(refId);
+            if (u == null) {
+                throw new ServiceException("关联人员不存在");
             }
             return;
         }
