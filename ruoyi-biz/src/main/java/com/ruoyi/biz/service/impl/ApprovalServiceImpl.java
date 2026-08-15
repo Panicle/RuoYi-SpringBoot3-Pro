@@ -2,6 +2,7 @@ package com.ruoyi.biz.service.impl;
 
 import com.ruoyi.biz.domain.Approval;
 import com.ruoyi.biz.domain.ApprovalHistory;
+import com.ruoyi.biz.domain.Project;
 import com.ruoyi.biz.domain.ProjectDocument;
 import com.ruoyi.biz.mapper.ApprovalHistoryMapper;
 import com.ruoyi.biz.mapper.ApprovalMapper;
@@ -41,6 +42,9 @@ public class ApprovalServiceImpl implements IApprovalService {
     private static final String STATUS_PENDING  = "PENDING";
     private static final String STATUS_APPROVED = "APPROVED";
     private static final String STATUS_REJECTED = "REJECTED";
+
+    /** 课题状态（与字典 project_status 一致；决策 D8：归档课题不可审批） */
+    private static final String STATUS_ARCHIVED = "ARCHIVED";
 
     /** 审批动作（与 approval_history.action 一致） */
     private static final String ACTION_APPROVE = "APPROVE";
@@ -118,7 +122,12 @@ public class ApprovalServiceImpl implements IApprovalService {
         if (doc == null) {
             throw new ServiceException("资料不存在");
         }
-        projectService.selectProjectById(doc.getProjectId());
+        Project project = projectService.selectProjectById(doc.getProjectId());
+        // 2'. 决策 D8：归档课题不可审批（PENDING 期间被归档后，dept_leader 仍不得 APPROVE/REJECT；
+        //     对齐 ExpenseServiceImpl 里 ARCHIVED 检查的写法与常量）
+        if (STATUS_ARCHIVED.equals(project.getStatus())) {
+            throw new ServiceException("已归档课题不可审批");
+        }
         // 3. REJECT 必填驳回原因
         if (ACTION_REJECT.equals(action) && StringUtils.isEmpty(rejectReason)) {
             throw new ServiceException("驳回原因不能为空");
