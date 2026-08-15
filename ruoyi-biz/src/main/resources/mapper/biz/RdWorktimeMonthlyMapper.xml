@@ -108,4 +108,3 @@
         order by m.researcher_id
     </select>
 </mapper>
-</content>

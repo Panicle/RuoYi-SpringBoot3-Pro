@@ -65,4 +65,3 @@
           and s.salary_month  = #{salaryMonth}
     </select>
 </mapper>
-</content>

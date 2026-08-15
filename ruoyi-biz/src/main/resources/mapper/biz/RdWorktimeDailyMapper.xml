@@ -69,4 +69,3 @@
           and del_flag      = '0'
     </select>
 </mapper>
-</content>
