@@ -24,6 +24,7 @@
 | 13 | V1.0.12__fix_menu_icon_tax_rate.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 9/9语句成功（首次+幂等复查各一次）：菜单图标修复（2011 课题管理 '#'→education、2020 合作单位 '#'→peoples，用户反馈菜单栏无图标）+ expense.tax_rate 字段 DECIMAL(5,4)→VARCHAR(20)（PL块预检列类型幂等，税率改字典）+ 字典 tax_rate（dict_id=230，20135-20138 1%/3%/6%/13%）；DB复查（两菜单icon正确/列类型VARCHAR/字典4项值序）全部 PASS |
 | 14 | V1.0.13__document_approval.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 50/50语句成功（首次+幂等复查各一次）：project_document 加 2 列（submitter_id/plan_submit_date）+ 索引 idx_project_document_submitter + approval 加 2 列（round/reject_reason）+ 唯一索引 idx_approval_doc_id_uk（doc_id，PL块预检重复→本次0条重复正常建索引）+ approval_history 加 1 列（round）+ 菜单 2050-2056 共 7 项（2050 C 课题资料 parent=2010 + 6 F 按钮）+ 角色挂载 31 条（§2.4矩阵：7+7+2+2+2+6+5）；DB复查（project_document 15列/approval 15列+唯一索引UNIQUE/approval_history 13列/菜单7项属性/7角色挂载31条）全部 PASS |
 | 15 | V1.0.14__honor_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 45/45语句成功（首次+幂等复查各一次）：honor 加 2 列（certificate_no/certificate_url）+ honor_relation 加 2 列（role_desc/contribution_desc）+ ref_type 注释更新追加 UNIT 合作单位 + 字典 honor_ref_type（dict_id=231，20139-20141 PROJECT/RESEARCHER/UNIT）+ 菜单 2060-2066 共 7 项（2060 C 荣誉管理 parent=2010 order_num=6 icon=star + 6 F 按钮）+ 角色挂载 29 条（§1矩阵：7+7+3+3+3+3+3）；DB复查（honor 15列/honor_relation 12列/ref_type 注释三枚举/字典3条/菜单7项含icon/order_num/7角色挂载29条）全部 PASS |
+| 16 | V1.0.15__rd_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 78/78语句成功（首次+幂等复查各一次）：rd_labor_allocation 加 5 列（monthly_hours/hourly_rate/surcharge_detail/confirm_by/confirm_time，15列→20列）+ 3 非唯一索引（idx_rd_alloc_pm/idx_rd_worktime_daily_prd/idx_rd_salary_rm）+ 菜单 2070-2085 共 14 项（2070 C 工时填报 icon=time order_num=7 + 2071-2072 F；2075 C 工资与预算 icon=money order_num=8 + 2076-2079 F；2080 C 分摊管理 icon=chart order_num=9 + 2081-2085 F）+ 角色挂载 56 条（§4矩阵：14+14+14+3+5+1+5）；DB复查（rd_labor_allocation 20列/3索引/菜单14项含icon+path+component/7角色挂载56条/surcharge_rate 未触碰 10行 SUM=0.4986）全部 PASS |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
@@ -150,6 +151,7 @@
 | 13 | `V1.0.12__fix_menu_icon_tax_rate.sql` | 阶段4收尾修复：菜单图标修复（2011 课题管理 '#'→education、2020 合作单位 '#'→peoples）+ expense.tax_rate 字段 DECIMAL(5,4)→VARCHAR(20) + 字典 tax_rate（dict_id=230，1%/3%/6%/13%） |
 | 14 | `V1.0.13__document_approval.sql` | 阶段5资料与审批基线：project_document 加 2 列（submitter_id/plan_submit_date）+ 索引 idx_project_document_submitter + approval 加 2 列（round/reject_reason）+ 唯一索引 idx_approval_doc_id_uk（doc_id，建前查重复行）+ approval_history 加 1 列（round）+ 菜单 2050-2056（7项）+ 角色挂载 31 条 |
 | 15 | `V1.0.14__honor_module.sql` | 阶段7荣誉管理基线：honor 加 2 列（certificate_no/certificate_url）+ honor_relation 加 2 列（role_desc/contribution_desc）+ ref_type 注释追加 UNIT 合作单位 + 字典 honor_ref_type（dict_id=231，20139-20141 PROJECT/RESEARCHER/UNIT）+ 菜单 2060-2066（7项，2060 C 荣誉管理 parent=2010 order_num=6 icon=star）+ 角色挂载 29 条 |
+| 16 | `V1.0.15__rd_module.sql` | 阶段8研发加计扣除基线：rd_labor_allocation 加 5 列（monthly_hours/hourly_rate/surcharge_detail/confirm_by/confirm_time，15列→20列）+ 3 非唯一索引（idx_rd_alloc_pm/idx_rd_worktime_daily_prd/idx_rd_salary_rm）+ 菜单 2070-2085（14项，2070/2075/2080 三C菜单 icon=time/money/chart 路径rdworktime/rdsalary/rdallocation）+ 角色挂载 56 条（§4矩阵：14+14+14+3+5+1+5） |
 
 ---
 
@@ -699,4 +701,81 @@
 - 阶段7 Task 2：后端（Honor Domain + HonorRelation Domain + 列表/详情/CRUD + 证书附件上传 + 关联子资源按 ref_type 路由 PROJECT/RESEARCHER/UNIT + 数据权限双通道；前端仓 `star.svg` 图标已确认存在）
 - 阶段7 Task 3：前端（views/biz/honor/index.vue + relationDialog.vue + api/biz/honor.js；分支 feature/biz-honor-ui）
 - 阶段7 Task 4：冒烟（任务卡 §七 8 项：CRUD/证书上传/三种关联类型维护/级联逻辑删 honor_relation/数据权限/字典回显/回归）
+
+---
+
+## V1.0.15 — 阶段8 研发加计扣除基线
+
+**日期**：2026-08-15
+
+**任务卡关联**：阶段8 研发加计扣除 / Task 1：V1.0.15 SQL（rd_labor_allocation 加 5 列 + 3 非唯一索引 + 菜单 2070-2085 + 角色挂载 56 条）+ devdm 幂等执行 + changelog
+
+**变更内容**：
+
+1. **rd_labor_allocation 表加 5 列**（实际基线 15 列 → V1.0.15 后 20 列，幂等 PL 块预检 `USER_TAB_COLUMNS` 后 `EXECUTE IMMEDIATE ALTER TABLE ADD`，照 V1.0.14 PL 块风格）
+   - `monthly_hours DECIMAL(8,2)`：月研发工时快照（按（researcher, month）聚合的当月研发工时，分摊批次写入时计算）
+   - `hourly_rate DECIMAL(12,2)`：时薪快照（月薪÷174，展示口径，Task 2/3 工资与工时模块联动写入）
+   - `surcharge_detail VARCHAR(2000)`：附加费逐项 JSON（`{"edu":金额,...}` 共 10 项，rate_code 为键；总和不存于本表，存 `surcharge_total`）
+   - `confirm_by VARCHAR(64)`：确认人（分摊批次确认时的操作者 user_name/sys_user.user_name）
+   - `confirm_time TIMESTAMP`：确认时间
+
+2. **新增 3 个非唯一索引**（PL 块预检 `USER_INDEXES` 幂等创建）
+   - `idx_rd_alloc_pm` ON `rd_labor_allocation(project_id, month)`：分摊批次按课题×月聚合查询
+   - `idx_rd_worktime_daily_prd` ON `rd_worktime_daily(project_id, researcher_id, work_date)`：工时日表按"课题-人员-日"查询（D9 校验跨课题同日合计走此索引）
+   - `idx_rd_salary_rm` ON `rd_researcher_salary(researcher_id, salary_month)`：工资表按"人员-月"查询（Task 2 工资月度 upsert/列表）
+
+3. **新增菜单 14 项**（sys_menu 2070–2085，挂在 2010 科研管理下，C 菜单 order_num=7/8/9）
+   - 2070 C 工时填报（path=rdworktime，component=biz/rd/worktime，perms=biz:rd:worktime:list，icon=time，order_num=7）
+   - 2071 F 工时保存（biz:rd:worktime:save，order_num=1）
+   - 2072 F 复制上月（biz:rd:worktime:copy，order_num=2）
+   - 2075 C 工资与预算（path=rdsalary，component=biz/rd/salary，perms=biz:rd:salary:list，icon=money，order_num=8）
+   - 2076 F 工资维护（biz:rd:salary:save，order_num=1）
+   - 2077 F 工资导入（biz:rd:salary:import，order_num=2）
+   - 2078 F 工资导出（biz:rd:salary:export，order_num=3）
+   - 2079 F 预算维护（biz:rd:salary:budget，order_num=4）
+   - 2080 C 分摊管理（path=rdallocation，component=biz/rd/allocation，perms=biz:rd:alloc:list，icon=chart，order_num=9）
+   - 2081 F 分摊计算（biz:rd:alloc:calc，order_num=1）
+   - 2082 F 批次确认（biz:rd:alloc:confirm，order_num=2）
+   - 2083 F 撤销确认（biz:rd:alloc:revoke，order_num=3）
+   - 2084 F 单课题导出（biz:rd:alloc:export，order_num=4）
+   - 2085 F 多课题汇总导出（biz:rd:alloc:summary，order_num=5）
+   - C 菜单 icon(time/money/chart)已确认存在于前端 svg 目录 `RuoYi-SpringBoot3-ElementPlus/src/assets/icons/svg/`，无需语义替换
+
+4. **角色挂载（任务卡 §4 矩阵，共 56 条 `sys_role_menu`，逐项实算）**
+   - admin(1) / science_admin(101) / leader(100)：各挂 14 项（全部 C+F，所领导有预算/工资/计算确认/汇总导出权）
+   - dept_leader(104)：3 项（2070 本室工时查看 + 2080 分摊查看 + 2084 单课题导出）
+   - researcher(105)：5 项（2070/2071/2072 本人填报 + 2080/2084 本人查看+导出）
+   - office(102)：1 项（2080 行政查看）
+   - labor_hr(103)：5 项（2070/2075/2078/2080/2084 工资可见可导+分摊只读）
+   - **合计 14+14+14+3+5+1+5 = 56 条**
+
+5. **不创建新表**：基线 5 张 rd_ 表（rd_labor_budget / rd_researcher_salary / rd_worktime_daily / rd_worktime_monthly / rd_labor_allocation）+ surcharge_rate 已在 V1.0.0 建立；本版本 DDL 变更仅 `rd_labor_allocation` 加列
+
+6. **不修改 surcharge_rate 数据**：status 字面量 `'ACTIVE'`（不是 RuoYi 通用 `'0'`）为预期行为，Task 2/3 代码层直接使用字面量过滤；本版本不加字典映射
+
+**幂等性设计**：
+- 列添加走 PL 匿名块预检 `USER_TAB_COLUMNS`（达梦 `ALTER TABLE ADD` 无 `IF NOT EXISTS`，照 V1.0.14 PL 块风格）后 `EXECUTE IMMEDIATE 'ALTER TABLE ... ADD ...'`；`COMMENT ON COLUMN` 嵌入 PL 块内同样只首次执行
+- 非唯一索引走 PL 匿名块预检 `USER_INDEXES` 后 `EXECUTE IMMEDIATE 'CREATE INDEX ...'`（达梦 `CREATE INDEX` 无 `IF NOT EXISTS`，照 V1.0.10/13 索引写法）
+- 菜单 / 角色菜单挂载走 `INSERT ... SELECT ... WHERE NOT EXISTS`（同 V1.0.6–V1.0.14）
+- **首次执行 78/78 成功；二次重跑 78/78 全绿零副作用**
+
+**DB 复查**（`python .tmp/check_v1015_after.py`，全部 PASS）：
+- rd_labor_allocation 表现有 20 列（实际基数 15 + 5），`MONTHLY_HOURS`(DECIMAL 8,2) / `HOURLY_RATE`(DECIMAL 12,2) / `SURCHARGE_DETAIL`(VARCHAR 2000) / `CONFIRM_BY`(VARCHAR 64) / `CONFIRM_TIME`(TIMESTAMP) 列存在且注释对齐任务卡 §1
+- `IDX_RD_ALLOC_PM` 存在 on RD_LABOR_ALLOCATION(NONUNIQUE)；`IDX_RD_WORKTIME_DAILY_PRD` 存在 on RD_WORKTIME_DAILY(NONUNIQUE)；`IDX_RD_SALARY_RM` 存在 on RD_RESEARCHER_SALARY(NONUNIQUE)
+- `sys_menu` 2070–2085 共 14 项，类型(C/F)/父菜单(2010/2070/2075/2080)/order_num(C=7/8/9，F=1-5)/组件/权限/icon(2070=time/2075=money/2080=chart)/路径(rdworktime/rdsalary/rdallocation)全部对齐任务卡 §3
+- `sys_role_menu` 7 角色挂载总数 = 56 条（§4 矩阵实算 14+14+14+3+5+1+5=56 一致）
+- `surcharge_rate` 未触碰：10 ACTIVE 行 SUM(rate_value)=0.4986 不变
+
+**列数口径说明**：任务卡 §1 标注 `rd_labor_allocation` 基线 16 列、加列后 21 列；devdm 实际基线（V1.0.0 建表后 2026-08-11 统一补 `remark` 列后）为 15 列，故本脚本按任务卡**增量 5 列**落地，加列后期望 20 列。列增量与任务卡完全一致，仅"前后总列数"随实际基数下浮 1 列。
+
+**依赖**：
+- V1.0.0：`rd_labor_budget` / `rd_researcher_salary` / `rd_worktime_daily` / `rd_worktime_monthly` / `rd_labor_allocation`（5 张研发人工费基础表）+ `surcharge_rate`（10 项 ACTIVE 附加费比例）
+- V1.0.4：6 业务角色（100–105）
+- V1.0.6：菜单 2010（科研管理目录）
+
+**后续任务**：
+- 阶段8 Task 2：后端基础侧（5 Domain/Mapper + 预算/工资/工时，端点 1-10；`RdLaborAllocation` Domain 含本次新增 5 字段 + 非表字段 researcherName；任务卡已对齐 V1.0.0 列 + V1.0.15 新列）
+- 阶段8 Task 3：后端业务侧（`RdWorktimeServiceImpl` 实现 D9 全套校验+月汇总重算、`RdSalaryServiceImpl` 工资月度 upsert+导入导出、`RdAllocationServiceImpl` 分摊批次计算+确认+撤销+JSON 写 `surcharge_detail`、6 Controller 拆分）
+- 阶段8 Task 4：前端（`views/biz/rd/{worktime,salary,allocation}/index.vue` + 3 api + 6 dialog；icon 复用 `time.svg`/`money.svg`/`chart.svg`）
+- 阶段8 Task 5：冒烟（任务卡 §七 12 项 + 回归）+ surcharge_rate 10 项 ACTIVE 比例透传校验
 
