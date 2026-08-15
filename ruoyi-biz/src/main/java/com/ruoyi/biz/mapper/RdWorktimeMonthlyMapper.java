@@ -33,6 +33,15 @@ public interface RdWorktimeMonthlyMapper extends BaseMapper<RdWorktimeMonthly> {
                                                         @Param("month") String month);
 
     /**
+     * 端点 16 工时统计表导出专用：LEFT JOIN sys_user 取 researcherName（researcherName 为 exist=false 字段，
+     * 必须显式 JOIN 才能填充）；selfUserId 非空时叠加 {@code researcher_id = selfUserId} 行级过滤
+     * （researcher 角色仅本人行，与 /biz/rd/worktime/monthly/list researcher 通道口径一致）。
+     */
+    List<RdWorktimeMonthly> selectMembersByProjectMonthForExport(@Param("projectId") Long projectId,
+                                                                 @Param("month") String month,
+                                                                 @Param("selfUserId") Long selfUserId);
+
+    /**
      * 月度汇总分页列表（@DataScope 通道：deptAlias=d / userAlias=u，三档过滤；
      * researcher 不调用此方法，Service 走"本人相关"专用分支）。
      * SELECT vo 必须 LEFT JOIN project p + sys_dept d + sys_user u + sys_user u2（u2 取 researcherName）；

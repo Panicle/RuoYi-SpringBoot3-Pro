@@ -39,6 +39,8 @@ public interface RdLaborAllocationMapper extends BaseMapper<RdLaborAllocation> {
 
     /**
      * 多课题×某年 12 月聚合 Σalloc/Σsurcharge/Σgrand（端点 18 多课题汇总用）。
+     * <p><b>汇总口径 = 已确认批次（status='CONFIRMED'）</b>，与批次看板 SUM 口径一致；
+     * DRAFT 批次不计入（任务卡裁决采纳 fix I3）。</p>
      * 按 (project_id, month) 升序稳定排序，month=YYYY-MM；调用方负责 projectIds 范围（scoped 闸门已通过）。
      */
     List<RdAllocSummaryRow> aggregateByProjectsYear(@Param("projectIds") List<Long> projectIds,

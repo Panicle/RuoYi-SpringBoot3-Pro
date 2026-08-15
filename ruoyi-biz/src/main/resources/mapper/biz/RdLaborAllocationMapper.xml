@@ -63,7 +63,8 @@
            and del_flag   = '0'
     </select>
 
-    <!-- 多课题×年聚合 Σalloc/Σsurcharge/Σgrand（端点 18 导出汇总用） -->
+    <!-- 多课题×年聚合 Σalloc/Σsurcharge/Σgrand（端点 18 导出汇总用）
+         汇总口径=已确认批次（status='CONFIRMED'），与批次看板 SUM 口径一致。fix I3。 -->
     <select id="aggregateByProjectsYear" resultType="com.ruoyi.biz.domain.vo.RdAllocSummaryRow">
         select project_id    as projectId,
                month         as month,
@@ -72,6 +73,7 @@
                sum(grand_total)      as sumGrand
           from rd_labor_allocation
          where del_flag = '0'
+           and status   = 'CONFIRMED'
            and project_id in
            <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
                #{pid}

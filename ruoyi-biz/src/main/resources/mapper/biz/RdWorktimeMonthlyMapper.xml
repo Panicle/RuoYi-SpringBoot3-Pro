@@ -91,5 +91,21 @@
           and del_flag    = '0'
         order by researcher_id
     </select>
+
+    <!-- 导出专用：LEFT JOIN sys_user 取 researcherName；selfUserId 非空时叠加 researcher_id = selfUserId 行级过滤（端点 16 工时统计表导出用） -->
+    <select id="selectMembersByProjectMonthForExport" resultMap="RdWorktimeMonthlyResult">
+        select m.id, m.project_id, m.researcher_id, m.month,
+               m.total_rd_hours, m.cumulative_hours, m.del_flag,
+               m.create_by, m.create_time, m.update_by, m.update_time, m.remark,
+               su.nick_name as researcher_name
+        from rd_worktime_monthly m
+        left join sys_user su on m.researcher_id = su.user_id
+        where m.project_id = #{projectId}
+          and m.month      = #{month}
+          and m.total_rd_hours &gt; 0
+          and m.del_flag    = '0'
+          <if test="selfUserId != null"> and m.researcher_id = #{selfUserId} </if>
+        order by m.researcher_id
+    </select>
 </mapper>
 </content>

@@ -96,7 +96,11 @@ public class RdExportServiceImpl implements IRdExportService {
         // scoped 闸门（无权即抛 ServiceException，由全局异常处理转 500）
         Project project = projectService.selectProjectById(projectId);
 
-        List<RdWorktimeMonthly> rows = rdWorktimeMonthlyMapper.selectMembersByProjectMonth(projectId, month);
+        // researcher 角色仅本人行（与 /biz/rd/worktime/monthly/list researcher 通道口径一致；
+        // 此前 selectMembersByProjectMonth 未做此过滤，导致 researcher 看见全组成员工时 — fix I4）
+        Long selfUserId = isResearcherOnly() ? SecurityUtils.getUserId() : null;
+        List<RdWorktimeMonthly> rows = rdWorktimeMonthlyMapper.selectMembersByProjectMonthForExport(
+                projectId, month, selfUserId);
 
         Workbook wb = new XSSFWorkbook();
         try {
@@ -212,6 +216,7 @@ public class RdExportServiceImpl implements IRdExportService {
                 sumAlloc = sumAlloc.add(alloc);
 
                 // 4..4+rates.size()-1 各项附加费（按 rate_code 从 JSON 取；缺键补 0.00）
+                // 分列合计（10 项附加费列的合计行）走 JSON 求和 — 列内值仅 JSON 持有
                 Map<String, String> detailMap = parseSurchargeDetail(a.getSurchargeDetail());
                 BigDecimal rowSurcharge = BigDecimal.ZERO;
                 for (int k = 0; k < rates.size(); k++) {
@@ -229,13 +234,13 @@ public class RdExportServiceImpl implements IRdExportService {
                     rowSurcharge = rowSurcharge.add(val);
                     sumSurchargeByRate[k] = (sumSurchargeByRate[k] == null ? BigDecimal.ZERO : sumSurchargeByRate[k]).add(val);
                 }
-                sumSurcharge = sumSurcharge.add(rowSurcharge);
-
-                // 附加费合计 / 总计（以 DB 落库值为准；JSON 求和为校验参考）
+                // 附加费合计 / 总计（合计行的"附加费合计"列以 DB 落库的 surchargeTotal 为准 — 与总计列同源；
+                // JSON 求和仅用于 10 项分列。fix I2）
                 BigDecimal surchargeTotal = nz(a.getSurchargeTotal());
                 BigDecimal grandTotal = nz(a.getGrandTotal());
                 writeDecimal(row, baseHeaders.length + rates.size(), surchargeTotal, styles.get("amount"));
                 writeDecimal(row, baseHeaders.length + rates.size() + 1, grandTotal, styles.get("amount"));
+                sumSurcharge = sumSurcharge.add(surchargeTotal);
                 sumGrand = sumGrand.add(grandTotal);
             }
 
