@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.RdWorktimeMonthlyMapper">
+
+    <resultMap type="RdWorktimeMonthly" id="RdWorktimeMonthlyResult">
+        <id     property="id"               column="id"               />
+        <result property="projectId"        column="project_id"       />
+        <result property="researcherId"     column="researcher_id"    />
+        <result property="month"            column="month"            />
+        <result property="totalRdHours"     column="total_rd_hours"   />
+        <result property="cumulativeHours"  column="cumulative_hours" />
+        <result property="delFlag"          column="del_flag"         />
+        <result property="createBy"         column="create_by"        />
+        <result property="createTime"       column="create_time"      />
+        <result property="updateBy"         column="update_by"        />
+        <result property="updateTime"       column="update_time"      />
+        <result property="remark"           column="remark"           />
+        <result property="researcherName"   column="researcher_name"  />
+        <result property="projectNo"        column="project_no"       />
+        <result property="projectName"      column="project_name"     />
+    </resultMap>
+
+    <!-- 数据范围联接（@DataScope deptAlias=d / userAlias=u）：
+         p = project（取 projectNo/projectName/dept_id/leader_id）、
+         d = sys_dept（取 p.dept_id）、
+         u = sys_user（取 p.leader_id，专供数据权限）、
+         u2 = sys_user（取 researcherName）；别名 d/u 专供数据权限使用，不得被业务表占用。 -->
+    <sql id="selectRdWorktimeMonthlyVo">
+        select m.id, m.project_id, m.researcher_id, m.month,
+               m.total_rd_hours, m.cumulative_hours, m.del_flag,
+               m.create_by, m.create_time, m.update_by, m.update_time, m.remark,
+               u2.nick_name as researcher_name,
+               p.project_no, p.project_name
+        from rd_worktime_monthly m
+        join project p          on m.project_id = p.project_id
+        join sys_user u2        on m.researcher_id = u2.user_id
+        left join sys_dept d    on p.dept_id    = d.dept_id
+        left join sys_user u    on p.leader_id  = u.user_id
+    </sql>
+
+    <!-- 列表公共筛选（projectId / month / researcherId） -->
+    <sql id="rdWorktimeMonthlyFilters">
+        <if test="projectId != null"> and m.project_id = #{projectId} </if>
+        <if test="month != null and month != ''"> and m.month = #{month} </if>
+        <if test="researcherId != null"> and m.researcher_id = #{researcherId} </if>
+    </sql>
+
+    <!-- 列表：@DataScope 三档通道（deptAlias=d, userAlias=u），researcher 不调用此方法 -->
+    <select id="selectRdWorktimeMonthlyList" parameterType="RdWorktimeMonthly" resultMap="RdWorktimeMonthlyResult">
+        <include refid="selectRdWorktimeMonthlyVo"/>
+        <where>
+            m.del_flag = '0' and p.del_flag = '0'
+            <include refid="rdWorktimeMonthlyFilters"/>
+            ${params.dataScope}
+        </where>
+        order by m.month desc, m.id desc
+    </select>
+
+    <!-- researcher 列表（本人相关）：仅本人行 WHERE researcher_id = selfUserId -->
+    <select id="selectRdWorktimeMonthlyListForResearcher" parameterType="RdWorktimeMonthly" resultMap="RdWorktimeMonthlyResult">
+        <include refid="selectRdWorktimeMonthlyVo"/>
+        <where>
+            m.del_flag = '0' and p.del_flag = '0'
+            <include refid="rdWorktimeMonthlyFilters"/>
+            and m.researcher_id = #{params.selfUserId}
+        </where>
+        order by m.month desc, m.id desc
+    </select>
+
+    <!-- 按 (projectId, researcherId, month) 查有效单行（重算用） -->
+    <select id="selectByProjectResearcherMonth" resultMap="RdWorktimeMonthlyResult">
+        select id, project_id, researcher_id, month,
+               total_rd_hours, cumulative_hours, del_flag,
+               create_by, create_time, update_by, update_time, remark
+        from rd_worktime_monthly
+        where project_id    = #{projectId}
+          and researcher_id = #{researcherId}
+          and month         = #{month}
+          and del_flag      = '0'
+    </select>
+</mapper>
+</content>

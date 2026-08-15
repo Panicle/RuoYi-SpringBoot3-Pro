@@ -1,0 +1,42 @@
+package com.ruoyi.biz.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.ruoyi.biz.domain.RdWorktimeMonthly;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+
+/**
+ * 月度研发工时汇总 Mapper 接口
+ *
+ * <p>task brief D9：保存/复制工时同事务重算 (project, researcher, month) 的
+ * total_rd_hours / cumulative_hours；端点 10（分页月度汇总）走 @DataScope 三档
+ * （researcher 本人 / dept_leader 本室 / 其他全所）。</p>
+ *
+ * @author kys
+ * @date 2026-08-15
+ */
+public interface RdWorktimeMonthlyMapper extends BaseMapper<RdWorktimeMonthly> {
+
+    /**
+     * 按 (projectId, researcherId, month) 查有效汇总行（唯一索引 idx_rd_worktime_monthly_uk 兜底）。
+     */
+    RdWorktimeMonthly selectByProjectResearcherMonth(@Param("projectId") Long projectId,
+                                                     @Param("researcherId") Long researcherId,
+                                                     @Param("month") String month);
+
+    /**
+     * 月度汇总分页列表（@DataScope 通道：deptAlias=d / userAlias=u，三档过滤；
+     * researcher 不调用此方法，Service 走"本人相关"专用分支）。
+     * SELECT vo 必须 LEFT JOIN project p + sys_dept d + sys_user u + sys_user u2（u2 取 researcherName）；
+     * 别名 d/u 专供数据权限使用（与 ExpenseMapper 惯例一致）。
+     */
+    @com.ruoyi.common.annotation.DataScope(deptAlias = "d", userAlias = "u")
+    List<RdWorktimeMonthly> selectRdWorktimeMonthlyList(RdWorktimeMonthly query);
+
+    /**
+     * 月度汇总列表（researcher 专用）：仅本人行 WHERE researcher_id = selfUserId
+     * （task brief D9：数据权限三档首档）。
+     */
+    List<RdWorktimeMonthly> selectRdWorktimeMonthlyListForResearcher(RdWorktimeMonthly query);
+}

@@ -1,0 +1,38 @@
+package com.ruoyi.biz.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.ruoyi.biz.domain.RdLaborAllocation;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+
+/**
+ * 人工费分摊 Mapper 接口（骨架）
+ *
+ * <p>task brief：RdLaborAllocation 本任务（Task 2）只建 Domain + Mapper 骨架（resultMap + 基础查询），
+ * Service 业务规则（分摊计算 / 批次确认 / 撤销确认）归 Task 3。</p>
+ *
+ * @author kys
+ * @date 2026-08-15
+ */
+public interface RdLaborAllocationMapper extends BaseMapper<RdLaborAllocation> {
+
+    /**
+     * 按 (projectId, month) 查有效分摊行（task brief：预算 save 校验 CONFIRMED 月拒改）。
+     */
+    List<RdLaborAllocation> selectByProjectAndMonth(@Param("projectId") Long projectId,
+                                                    @Param("month") String month);
+
+    /**
+     * 按 (projectId, month) 计数 CONFIRMED 分摊批次（任务卡 D9：预算锁定判定）。
+     */
+    int countConfirmedByProjectAndMonth(@Param("projectId") Long projectId,
+                                        @Param("month") String month);
+
+    /**
+     * 按 (projectId, month) 计数 CONFIRMED 分摊批次（Integer 月传值通道，
+     * 内部与 countConfirmedByProjectAndMonth 等价；为兼容 budget save 的 Integer month 入参）。
+     */
+    int countConfirmedByProjectAndMonthInt(@Param("projectId") Long projectId,
+                                           @Param("month") Integer month);
+}

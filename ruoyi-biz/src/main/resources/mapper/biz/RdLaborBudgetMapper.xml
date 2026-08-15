@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.RdLaborBudgetMapper">
+
+    <resultMap type="RdLaborBudget" id="RdLaborBudgetResult">
+        <id     property="budgetId"    column="budget_id"    />
+        <result property="projectId"   column="project_id"   />
+        <result property="budgetYear"  column="budget_year"  />
+        <result property="month"       column="month"        />
+        <result property="totalAmount" column="total_amount" />
+        <result property="status"      column="status"       />
+        <result property="delFlag"     column="del_flag"     />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"  column="create_time"  />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"  column="update_time"  />
+        <result property="remark"      column="remark"       />
+    </resultMap>
+
+    <sql id="selectRdLaborBudgetVo">
+        select budget_id, project_id, budget_year, month, total_amount, status, del_flag,
+               create_by, create_time, update_by, update_time, remark
+        from rd_labor_budget
+    </sql>
+
+    <!-- 按 (projectId, year) 查 12 个月有效预算行（端点 1） -->
+    <select id="selectByProjectAndYear" resultMap="RdLaborBudgetResult">
+        <include refid="selectRdLaborBudgetVo"/>
+        where project_id  = #{projectId}
+          and budget_year = #{budgetYear}
+          and del_flag    = '0'
+        order by month
+    </select>
+
+    <!-- 按 (projectId, year, month) 查有效单行（增量 upsert 查重用） -->
+    <select id="selectByProjectYearMonth" resultMap="RdLaborBudgetResult">
+        <include refid="selectRdLaborBudgetVo"/>
+        where project_id  = #{projectId}
+          and budget_year = #{budgetYear}
+          and month       = #{month}
+          and del_flag    = '0'
+    </select>
+
+    <!-- 该月是否已锁定（CONFIRMED 分摊批次存在 → 预算拒改） -->
+    <select id="countConfirmedAllocation" resultType="java.lang.Integer">
+        select count(1) from rd_labor_allocation
+         where project_id = #{projectId}
+           and to_char(month, 'yyyy-MM') = #{month}
+           and status     = 'CONFIRMED'
+           and del_flag   = '0'
+    </select>
+</mapper>
+</content>

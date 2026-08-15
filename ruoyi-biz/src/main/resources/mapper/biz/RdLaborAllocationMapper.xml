@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.RdLaborAllocationMapper">
+
+    <resultMap type="RdLaborAllocation" id="RdLaborAllocationResult">
+        <id     property="allocId"         column="alloc_id"         />
+        <result property="projectId"       column="project_id"       />
+        <result property="researcherId"    column="researcher_id"    />
+        <result property="month"           column="month"            />
+        <result property="allocatedAmount" column="allocated_amount" />
+        <result property="surchargeTotal"  column="surcharge_total"  />
+        <result property="grandTotal"      column="grand_total"      />
+        <result property="status"          column="status"           />
+        <result property="batchNo"         column="batch_no"         />
+        <result property="delFlag"         column="del_flag"         />
+        <result property="createBy"        column="create_by"        />
+        <result property="createTime"      column="create_time"      />
+        <result property="updateBy"        column="update_by"        />
+        <result property="updateTime"      column="update_time"      />
+        <result property="remark"          column="remark"           />
+        <result property="monthlyHours"    column="monthly_hours"    />
+        <result property="hourlyRate"      column="hourly_rate"      />
+        <result property="surchargeDetail" column="surcharge_detail" />
+        <result property="confirmBy"       column="confirm_by"       />
+        <result property="confirmTime"     column="confirm_time"     />
+        <result property="researcherName"  column="researcher_name"  />
+    </resultMap>
+
+    <sql id="selectRdLaborAllocationVo">
+        select a.alloc_id, a.project_id, a.researcher_id, a.month,
+               a.allocated_amount, a.surcharge_total, a.grand_total, a.status, a.batch_no, a.del_flag,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
+               a.monthly_hours, a.hourly_rate, a.surcharge_detail, a.confirm_by, a.confirm_time,
+               u.nick_name as researcher_name
+        from rd_labor_allocation a
+        left join sys_user u on a.researcher_id = u.user_id
+    </sql>
+
+    <!-- 按 (projectId, month) 查有效分摊行 — 骨架查询 -->
+    <select id="selectByProjectAndMonth" resultMap="RdLaborAllocationResult">
+        <include refid="selectRdLaborAllocationVo"/>
+        where a.project_id = #{projectId}
+          and a.month      = #{month}
+          and a.del_flag   = '0'
+        order by a.researcher_id
+    </select>
+
+    <!-- CONFIRMED 计数（VARCHAR 月份通道，Task 3 分摊确认后用） -->
+    <select id="countConfirmedByProjectAndMonth" resultType="java.lang.Integer">
+        select count(1) from rd_labor_allocation
+         where project_id = #{projectId}
+           and month      = #{month}
+           and status     = 'CONFIRMED'
+           and del_flag   = '0'
+    </select>
+
+    <!-- CONFIRMED 计数（Integer 月份通道：预算 save 的 month 为 INT 1-12；预算 save 前把 month 拼成 'YYYY-MM' 传入） -->
+    <select id="countConfirmedByProjectAndMonthInt" resultType="java.lang.Integer">
+        select count(1) from rd_labor_allocation
+         where project_id = #{projectId}
+           and to_number(to_char(month, 'MM')) = #{month}
+           and status     = 'CONFIRMED'
+           and del_flag   = '0'
+    </select>
+</mapper>
+</content>
