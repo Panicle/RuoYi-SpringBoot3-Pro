@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.ApprovalHistoryMapper">
+
+    <resultMap type="ApprovalHistory" id="ApprovalHistoryResult">
+        <id     property="historyId"   column="history_id"   />
+        <result property="approvalId"  column="approval_id"  />
+        <result property="action"      column="action"       />
+        <result property="operatorId"  column="operator_id"  />
+        <result property="commentText" column="comment_text" />
+        <result property="operateTime" column="operate_time" />
+        <result property="delFlag"     column="del_flag"     />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"  column="create_time"  />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"  column="update_time"  />
+        <result property="remark"      column="remark"       />
+        <result property="round"       column="round"        />
+        <result property="operatorName" column="operator_name" />
+    </resultMap>
+
+    <!-- 按审批ID查历史（JOIN sys_user 带 operatorName；按 round + operate_time 有序） -->
+    <select id="selectByApprovalId" parameterType="Long" resultMap="ApprovalHistoryResult">
+        select h.history_id, h.approval_id, h.action, h.operator_id, h.comment_text,
+               h.operate_time, h.del_flag,
+               h.create_by, h.create_time, h.update_by, h.update_time, h.remark, h.round,
+               u.nick_name as operator_name
+        from approval_history h
+        left join sys_user u on h.operator_id = u.user_id
+        where h.del_flag = '0'
+          and h.approval_id = #{approvalId}
+        order by h.round asc, h.operate_time asc, h.history_id asc
+    </select>
+
+    <!-- 逻辑删除指定审批的全部有效历史（删资料级联调用；del_flag='2'） -->
+    <update id="softDeleteByApprovalId">
+        update approval_history
+        set del_flag    = '2',
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where approval_id = #{approvalId}
+          and del_flag = '0'
+    </update>
+</mapper>

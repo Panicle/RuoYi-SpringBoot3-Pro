@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.ApprovalMapper">
+
+    <resultMap type="Approval" id="ApprovalResult">
+        <id     property="approvalId"   column="approval_id"   />
+        <result property="docId"        column="doc_id"        />
+        <result property="applicantId"  column="applicant_id"  />
+        <result property="approverId"   column="approver_id"   />
+        <result property="status"       column="status"        />
+        <result property="commentText"  column="comment_text"  />
+        <result property="delFlag"      column="del_flag"      />
+        <result property="createBy"     column="create_by"     />
+        <result property="createTime"   column="create_time"   />
+        <result property="updateBy"     column="update_by"     />
+        <result property="updateTime"   column="update_time"   />
+        <result property="finishTime"   column="finish_time"   />
+        <result property="remark"       column="remark"        />
+        <result property="round"        column="round"         />
+        <result property="rejectReason" column="reject_reason" />
+        <result property="docFileName"  column="doc_file_name" />
+        <result property="projectName"  column="project_name"  />
+    </resultMap>
+
+    <!-- 数据范围联接（@DataScope deptAlias=d / userAlias=u）：
+         d = sys_dept、u = sys_user 两个别名专供数据权限使用，不得被业务表占用 -->
+    <sql id="selectApprovalVo">
+        select a.approval_id, a.doc_id, a.applicant_id, a.approver_id, a.status,
+               a.comment_text, a.del_flag,
+               a.create_by, a.create_time, a.update_by, a.update_time,
+               a.finish_time, a.remark, a.round, a.reject_reason,
+               pd.file_name as doc_file_name,
+               p.project_name
+        from approval a
+        join project_document pd on a.doc_id = pd.doc_id
+        join project p           on pd.project_id = p.project_id
+        left join sys_dept d     on p.dept_id = d.dept_id
+        left join sys_user u     on p.leader_id = u.user_id
+    </sql>
+
+    <!-- 列表：走 @DataScope 通道（deptAlias=d, userAlias=u），dept_leader 本室 / science_admin 全量；researcher 不调用此方法 -->
+    <select id="selectApprovalList" parameterType="Approval" resultMap="ApprovalResult">
+        <include refid="selectApprovalVo"/>
+        <where>
+            a.del_flag = '0' and pd.del_flag = '0' and p.del_flag = '0'
+            <if test="docId != null"> and a.doc_id = #{docId} </if>
+            <if test="status != null and status != ''"> and a.status = #{status} </if>
+            <!-- 数据范围过滤（@DataScope 注入 params.dataScope） -->
+            ${params.dataScope}
+        </where>
+        order by a.approval_id desc
+    </select>
+
+    <!-- researcher 列表（仅本人申请的）：applicant_id = me -->
+    <select id="selectApprovalListForResearcher" parameterType="Approval" resultMap="ApprovalResult">
+        <include refid="selectApprovalVo"/>
+        <where>
+            a.del_flag = '0' and pd.del_flag = '0' and p.del_flag = '0'
+            <if test="docId != null"> and a.doc_id = #{docId} </if>
+            <if test="status != null and status != ''"> and a.status = #{status} </if>
+            and a.applicant_id = #{params.selfUserId}
+        </where>
+        order by a.approval_id desc
+    </select>
+
+    <!-- 按资料ID查当前审批（唯一索引 idx_approval_doc_id_uk 兜底：一份资料至多一条） -->
+    <select id="selectByDocId" parameterType="Long" resultMap="ApprovalResult">
+        <include refid="selectApprovalVo"/>
+        where a.del_flag = '0' and a.doc_id = #{docId}
+    </select>
+
+    <!-- 状态机流转 UPDATE（submit/resubmit/audit 共用）：status/round/reject_reason 必传，
+         reject_reason 传 null 表示清空；commentText/applicantId/approverId/finishTime 为 null 不更新 -->
+    <update id="updateStatus" parameterType="Approval">
+        update approval
+        set status        = #{status},
+            round         = #{round},
+            reject_reason = #{rejectReason},
+            <if test="commentText != null"> comment_text = #{commentText}, </if>
+            <if test="applicantId != null"> applicant_id = #{applicantId}, </if>
+            <if test="approverId != null">  approver_id  = #{approverId}, </if>
+            <if test="finishTime != null">  finish_time  = #{finishTime}, </if>
+            update_by     = #{updateBy},
+            update_time   = sysdate
+        where approval_id = #{approvalId}
+          and del_flag   = '0'
+    </update>
+
+    <!-- 按资料逻辑删除全部有效审批（删资料级联调用；del_flag='2'） -->
+    <update id="softDeleteByDocId">
+        update approval
+        set del_flag    = '2',
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where doc_id = #{docId}
+          and del_flag = '0'
+    </update>
+</mapper>
