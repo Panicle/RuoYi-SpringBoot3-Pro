@@ -23,6 +23,8 @@
         <result property="approvalStatus" column="approval_status" />
         <result property="approvalRound"  column="approval_round"  />
         <result property="rejectReason"   column="reject_reason"   />
+        <result property="approvalId"     column="approval_id"     />
+        <result property="submitterName"  column="submitter_name"  />
     </resultMap>
 
     <!-- 数据范围联接（@DataScope deptAlias=d / userAlias=u）：
@@ -33,12 +35,14 @@
                doc.create_by, doc.create_time, doc.update_by, doc.update_time, doc.remark,
                doc.submitter_id, doc.plan_submit_date,
                p.project_no, p.project_name,
-               a.status as approval_status, a.round as approval_round, a.reject_reason
+               a.status as approval_status, a.round as approval_round, a.reject_reason,
+               a.approval_id, su.nick_name as submitter_name
         from project_document doc
         join project p               on doc.project_id = p.project_id
         left join approval a         on doc.doc_id = a.doc_id and a.del_flag = '0'
         left join sys_dept d         on p.dept_id  = d.dept_id
         left join sys_user u         on p.leader_id = u.user_id
+        left join sys_user su        on doc.submitter_id = su.user_id
     </sql>
 
     <sql id="documentFilters">

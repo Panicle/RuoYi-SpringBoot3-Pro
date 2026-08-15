@@ -102,6 +102,14 @@ public class ProjectDocument extends BaseEntity {
     @TableField(exist = false)
     private String rejectReason;
 
+    /** 审批主键（来自 approval.approval_id；前端审批/历史按钮直接取用，省一次详情请求） */
+    @TableField(exist = false)
+    private Long approvalId;
+
+    /** 提交人姓名（来自 sys_user.nick_name，JOIN submitter_id） */
+    @TableField(exist = false)
+    private String submitterName;
+
     // ====== 子资源（详情接口携带，非 project_document 字段） ======
 
     /** 当前审批（详情携带；一份资料至多一条有效审批，唯一索引 idx_approval_doc_id_uk 兜底） */
