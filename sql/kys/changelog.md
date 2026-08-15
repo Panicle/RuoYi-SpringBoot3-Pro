@@ -22,6 +22,7 @@
 | 11 | V1.0.10__contract_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-14 | ✅ 58/58语句成功（首次+幂等复查各一次）：contract 加 5 列（contract_no/party_unit_id/party_name/start_date/file_url，14列→19列）+ 索引 idx_contract_no_uk（UNIQUE on contract_no，照 project_no 模式含软删行）+ 索引 idx_contract_party_unit_id + contract_node 加 1 列 voucher_url（13列→14列）+ 字典 contract_status（dict_id=227，20127-20129 ACTIVE/EXPIRED/TERMINATED）+ node_status（dict_id=228，20130-20132 PENDING/DONE/OVERDUE）+ 菜单 2030-2036 共 7 项（2030 C 合同管理 parent=2010 + 6 F 按钮）+ 角色挂载 29 条（§1.4 矩阵）；DB复查（contract 19列/5列注释/UNIQUE索引/普通索引/contract_node voucher_url/两字典6条/菜单7项属性/7角色挂载29条）全部 PASS |
 | 12 | V1.0.11__expense_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-14 | ✅ 59/59语句成功（首次+幂等复查各一次）：budget_split 加 3 列（used_amount/balance/version，10列→13列）+ 存量初始化 UPDATE + 唯一索引 idx_budget_split_pc_uk（project_id,category,del_flag，PL块预检重复行→本次0条重复正常建索引）+ expense 加 4 列（split_id/status/voucher_url/version，13列→17列）+ 存量初始化 UPDATE + 索引 idx_expense_split_id + 字典 expense_status（dict_id=229，20133-20134 NORMAL/VOID）+ sys_config biz.expense.allowOverdraft=false（config_id 动态 MAX+1=7）+ 菜单 2040-2046 共 7 项（2040 C 经费管理 parent=2010 + 6 F 按钮）+ 角色挂载 30 条（任务卡正文写 31，按§2.5矩阵逐项实算为 30，矩阵优先于总数）；DB复查（budget_split 13列/唯一索引UNIQUE/expense 17列/普通索引/两存量初始化无NULL/字典2条/sys_config值false/菜单7项属性/7角色挂载30条）全部 PASS |
 | 13 | V1.0.12__fix_menu_icon_tax_rate.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 9/9语句成功（首次+幂等复查各一次）：菜单图标修复（2011 课题管理 '#'→education、2020 合作单位 '#'→peoples，用户反馈菜单栏无图标）+ expense.tax_rate 字段 DECIMAL(5,4)→VARCHAR(20)（PL块预检列类型幂等，税率改字典）+ 字典 tax_rate（dict_id=230，20135-20138 1%/3%/6%/13%）；DB复查（两菜单icon正确/列类型VARCHAR/字典4项值序）全部 PASS |
+| 14 | V1.0.13__document_approval.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 50/50语句成功（首次+幂等复查各一次）：project_document 加 2 列（submitter_id/plan_submit_date）+ 索引 idx_project_document_submitter + approval 加 2 列（round/reject_reason）+ 唯一索引 idx_approval_doc_id_uk（doc_id，PL块预检重复→本次0条重复正常建索引）+ approval_history 加 1 列（round）+ 菜单 2050-2056 共 7 项（2050 C 课题资料 parent=2010 + 6 F 按钮）+ 角色挂载 31 条（§2.4矩阵：7+7+2+2+2+6+5）；DB复查（project_document 15列/approval 15列+唯一索引UNIQUE/approval_history 13列/菜单7项属性/7角色挂载31条）全部 PASS |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
@@ -146,6 +147,7 @@
 | 11 | `V1.0.10__contract_module.sql` | 阶段3合同管理基线：contract 加 5 列（contract_no/party_unit_id/party_name/start_date/file_url）+ 索引 idx_contract_no_uk（UNIQUE，含软删行）+ 索引 idx_contract_party_unit_id + contract_node 加 1 列 voucher_url + 字典 contract_status（dict_id=227，3项）+ node_status（dict_id=228，3项，OVERDUE 阶段9 预留）+ 菜单 2030-2036（7项）+ 角色挂载 29 条 |
 | 12 | `V1.0.11__expense_module.sql` | 阶段4经费管理基线：budget_split 加 3 列（used_amount/balance/version）+ 存量初始化 + 唯一索引 idx_budget_split_pc_uk（project_id,category,del_flag，建前查重复行）+ expense 加 4 列（split_id/status/voucher_url/version）+ 存量初始化 + 索引 idx_expense_split_id + 字典 expense_status（dict_id=229，2项）+ sys_config biz.expense.allowOverdraft=false + 菜单 2040-2046（7项）+ 角色挂载 30 条 |
 | 13 | `V1.0.12__fix_menu_icon_tax_rate.sql` | 阶段4收尾修复：菜单图标修复（2011 课题管理 '#'→education、2020 合作单位 '#'→peoples）+ expense.tax_rate 字段 DECIMAL(5,4)→VARCHAR(20) + 字典 tax_rate（dict_id=230，1%/3%/6%/13%） |
+| 14 | `V1.0.13__document_approval.sql` | 阶段5资料与审批基线：project_document 加 2 列（submitter_id/plan_submit_date）+ 索引 idx_project_document_submitter + approval 加 2 列（round/reject_reason）+ 唯一索引 idx_approval_doc_id_uk（doc_id，建前查重复行）+ approval_history 加 1 列（round）+ 菜单 2050-2056（7项）+ 角色挂载 31 条 |
 
 ---
 
@@ -560,4 +562,70 @@
 **后续任务**：
 - 前端：税率下拉（expenseDialog.vue 改 el-select + useDict('tax_rate')）+ 合作单位 tree-select 回显修复——分支 feature/biz-fix-ux
 - 阶段5 资料与审批（下一阶段）
+
+---
+
+## V1.0.13 — 阶段5 资料与审批基线
+
+**日期**：2026-08-15
+
+**任务卡关联**：阶段5 资料与审批 / Task 1：V1.0.13 SQL（三表加列 + 唯一索引 + 菜单 2050-2056 + 角色挂载）+ devdm 幂等执行 + changelog
+
+**变更内容**：
+
+1. **project_document 表加 2 列**（实际基线 13 列 → V1.0.13 后 15 列，幂等 `ADD IF NOT EXISTS` + `COMMENT ON COLUMN`）
+   - `submitter_id BIGINT`：提交人 user_id（发起审批时回填；upload_by 保留作冗余）
+   - `plan_submit_date DATE`：计划提交日期（预警引擎用，科管/室主任手动维护）
+   - 新索引 `idx_project_document_submitter`（普通，PL 块预检 `USER_INDEXES` 幂等创建）
+
+2. **approval 表加 2 列**（实际基线 13 列 → V1.0.13 后 15 列）
+   - `round INT DEFAULT 1`：审批轮次（驳回重报 +1；发起时=1，一份资料一条当前审批）
+   - `reject_reason VARCHAR(500)`：最近一次驳回原因（REJECT 时回填；重报时清空）
+   - 新唯一索引 `idx_approval_doc_id_uk`（UNIQUE on doc_id）：PL 块预检 `USER_INDEXES` + 建索引前先查重复 doc_id（`del_flag='0' GROUP BY doc_id HAVING COUNT(*)>1`），重复则 `RAISE_APPLICATION_ERROR` 中止；本次 devdm 勘查 0 条重复，正常建索引通过
+
+3. **approval_history 表加 1 列**（实际基线 12 列 → V1.0.13 后 13 列）
+   - `round INT`：该动作发生时的审批轮次（SUBMIT=1 / REJECT=1 / RESUBMIT=2 / APPROVE=2 等）
+
+4. **新增菜单 7 项**（sys_menu 2050–2056，挂在 2010 科研管理下，order_num=5）
+   - 2050 C 课题资料（path=document，component=biz/document/index，perms=biz:document:list，icon=documentation）
+   - 2051 F 查询（biz:document:query）
+   - 2052 F 上传（biz:document:add）
+   - 2053 F 删除（biz:document:remove）
+   - 2054 F 发起审批（biz:document:submit，发起+重报复用）
+   - 2055 F 审批操作（biz:approval:audit）
+   - 2056 F 审批历史（biz:approval:history）
+
+5. **角色挂载（任务卡 §2.4 矩阵，共 31 条 `sys_role_menu`）**
+   - admin(1) / science_admin(101)：全部 7 项（2050–2056）
+   - dept_leader(104)：6 项（2050/2051/2052/2054/2055/2056，无 remove，本室审批）
+   - researcher(105)：5 项（2050/2051/2052/2054/2056，本人相关，不可 remove/audit）
+   - leader(100) / office(102) / labor_hr(103)：只读 2 项（2050+2051）
+   - 合计 7+7+6+5+2+2+2 = 31 条（任务卡 §2.4 矩阵逐项实算）
+
+**幂等性设计**：
+- 列添加走 `ALTER TABLE ADD IF NOT EXISTS`（达梦支持，同 V1.0.6–V1.0.12）；`COMMENT ON COLUMN` 直接执行（重跑覆盖为同值，零副作用）
+- 唯一/普通索引走 PL 匿名块预检 `USER_INDEXES` 后再 `CREATE [UNIQUE] INDEX`；唯一索引额外在预检通过后、建索引前用子查询查重复 doc_id，重复>0 则 `RAISE_APPLICATION_ERROR` 中止（本次 devdm 0 条重复，未触发）
+- 菜单 / 角色菜单挂载走 `INSERT ... SELECT ... WHERE NOT EXISTS`
+- **首次执行 50/50 成功；二次重跑 50/50 全绿零副作用**
+
+**DB 复查**（`python .tmp/check_v1013_after.py`，全部 PASS）：
+- project_document 表现有 15 列（实际基数 13 + 2），SUBMITTER_ID（BIGINT）/PLAN_SUBMIT_DATE（DATE）列存在且注释正确，`IDX_PROJECT_DOCUMENT_SUBMITTER` 存在
+- approval 表现有 15 列（实际基数 13 + 2），ROUND（INT）/REJECT_REASON（VARCHAR 500）列存在，`IDX_APPROVAL_DOC_ID_UK` 存在且 UNIQUE on DOC_ID
+- approval_history 表现有 13 列（实际基数 12 + 1），ROUND 列存在
+- `sys_menu` 2050–2056 共 7 项，类型/父菜单/order_num/组件/权限/icon 全部对齐任务卡 §2.4
+- `sys_role_menu` 7 角色挂载总数 = 31 条（§2.4 矩阵实算 7+7+6+5+2+2+2=31 一致）
+
+**列数口径说明（与任务卡标注的差异）**：任务卡 §二 标注三表基线为 14/12/10 列、加列后 16/14/11 列；但 devdm 实际基线（V1.0.0 建表后 2026-08-11 统一补 `remark` 列）为 13/13/12 列，故本脚本按**增量 2+2+1 列**落地，加列后期望 15/15/13 列。列增量与任务卡完全一致，仅"前后总列数"随实际基数上浮；后端实体字段与任务卡 §二 对齐（submitter_id/plan_submit_date/round/reject_reason/round）。
+
+**依赖**：
+- V1.0.0：`project_document` / `approval` / `approval_history` 表
+- V1.0.4：6 业务角色（100–105）
+- V1.0.6：菜单 2010（科研管理目录）
+- V1.0.1：`approval_status`（205 PENDING/APPROVED/REJECTED）、`project_stage`（201 INITIATION/MIDTERM/CLOSING/REVIEW）复用字典（本版本不新建）
+
+**后续任务**：
+- 阶段5 Task 2：后端资料侧（ProjectDocument 三件套 + 列表/上传/删除 + submit/resubmit + 数据权限双通道）
+- 阶段5 Task 3：后端审批侧（Approval + ApprovalHistory 三件套 + 列表/history/audit + 数据权限）
+- 阶段5 Task 4：前端（资料列表 + 上传/审批/历史弹窗，分支 feature/biz-document-ui）
+- 阶段5 Task 5：冒烟（任务卡 §七 8 项）+ 回归
 

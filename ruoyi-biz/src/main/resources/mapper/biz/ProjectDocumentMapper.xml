@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.ProjectDocumentMapper">
+
+    <resultMap type="ProjectDocument" id="ProjectDocumentResult">
+        <id     property="docId"          column="doc_id"          />
+        <result property="projectId"      column="project_id"      />
+        <result property="stage"          column="stage"           />
+        <result property="fileName"       column="file_name"       />
+        <result property="fileUrl"        column="file_url"        />
+        <result property="uploadBy"       column="upload_by"       />
+        <result property="uploadTime"     column="upload_time"     />
+        <result property="delFlag"        column="del_flag"        />
+        <result property="createBy"       column="create_by"       />
+        <result property="createTime"     column="create_time"     />
+        <result property="updateBy"       column="update_by"       />
+        <result property="updateTime"     column="update_time"     />
+        <result property="remark"         column="remark"          />
+        <result property="submitterId"    column="submitter_id"    />
+        <result property="planSubmitDate" column="plan_submit_date"/>
+        <result property="projectNo"      column="project_no"      />
+        <result property="projectName"    column="project_name"    />
+        <result property="approvalStatus" column="approval_status" />
+        <result property="approvalRound"  column="approval_round"  />
+        <result property="rejectReason"   column="reject_reason"   />
+        <result property="approvalId"     column="approval_id"     />
+        <result property="submitterName"  column="submitter_name"  />
+    </resultMap>
+
+    <!-- 数据范围联接（@DataScope deptAlias=d / userAlias=u）：
+         d = sys_dept、u = sys_user 两个别名专供数据权限使用，不得被业务表占用 -->
+    <sql id="selectDocumentVo">
+        select doc.doc_id, doc.project_id, doc.stage, doc.file_name, doc.file_url,
+               doc.upload_by, doc.upload_time, doc.del_flag,
+               doc.create_by, doc.create_time, doc.update_by, doc.update_time, doc.remark,
+               doc.submitter_id, doc.plan_submit_date,
+               p.project_no, p.project_name,
+               a.status as approval_status, a.round as approval_round, a.reject_reason,
+               a.approval_id, su.nick_name as submitter_name
+        from project_document doc
+        join project p               on doc.project_id = p.project_id
+        left join approval a         on doc.doc_id = a.doc_id and a.del_flag = '0'
+        left join sys_dept d         on p.dept_id  = d.dept_id
+        left join sys_user u         on p.leader_id = u.user_id
+        left join sys_user su        on doc.submitter_id = su.user_id
+    </sql>
+
+    <sql id="documentFilters">
+        <if test="projectId != null"> and doc.project_id = #{projectId} </if>
+        <if test="stage != null and stage != ''"> and doc.stage = #{stage} </if>
+        <if test="fileName != null and fileName != ''"> and doc.file_name like concat(concat('%', #{fileName}), '%') </if>
+        <if test="approvalStatus != null and approvalStatus != ''"> and a.status = #{approvalStatus} </if>
+    </sql>
+
+    <!-- 列表：走 @DataScope 通道（deptAlias=d, userAlias=u），researcher 不调用此方法 -->
+    <select id="selectDocumentList" parameterType="ProjectDocument" resultMap="ProjectDocumentResult">
+        <include refid="selectDocumentVo"/>
+        <where>
+            doc.del_flag = '0' and p.del_flag = '0'
+            <include refid="documentFilters"/>
+            <!-- 数据范围过滤（@DataScope 注入 params.dataScope） -->
+            ${params.dataScope}
+        </where>
+        order by doc.doc_id desc
+    </select>
+
+    <!-- researcher 列表（本人相关）：所属课题 leader_id = me OR 课题成员含 me -->
+    <select id="selectDocumentListForResearcher" parameterType="ProjectDocument" resultMap="ProjectDocumentResult">
+        <include refid="selectDocumentVo"/>
+        <where>
+            doc.del_flag = '0' and p.del_flag = '0'
+            <include refid="documentFilters"/>
+            and (
+                p.leader_id = #{params.selfUserId}
+                or exists (
+                    select 1 from project_member m
+                     where m.project_id = p.project_id
+                       and m.user_id    = #{params.selfUserId}
+                       and m.del_flag   = '0'
+                )
+            )
+        </where>
+        order by doc.doc_id desc
+    </select>
+
+    <!-- 详情：JOIN project + approval 视图（不带数据范围，Service 走 scoped 闸门） -->
+    <select id="selectDocumentById" parameterType="Long" resultMap="ProjectDocumentResult">
+        <include refid="selectDocumentVo"/>
+        where doc.del_flag = '0' and doc.doc_id = #{docId}
+    </select>
+
+    <!-- 逻辑删除单条资料（级联软删审批/历史由 Service 同事务调用各自 Mapper） -->
+    <update id="softDeleteByDocId">
+        update project_document
+        set del_flag    = '2',
+            update_by   = #{updateBy},
+            update_time = sysdate
+        where doc_id = #{docId}
+          and del_flag = '0'
+    </update>
+
+    <!-- 回填提交人（发起审批时；V1.0.13 新列 submitter_id） -->
+    <update id="updateSubmitter">
+        update project_document
+        set submitter_id = #{submitterId},
+            update_by    = #{updateBy},
+            update_time  = sysdate
+        where doc_id = #{docId}
+          and del_flag = '0'
+    </update>
+</mapper>

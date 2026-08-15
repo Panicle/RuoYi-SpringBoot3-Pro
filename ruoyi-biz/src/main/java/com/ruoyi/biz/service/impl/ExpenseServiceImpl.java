@@ -161,7 +161,7 @@ public class ExpenseServiceImpl implements IExpenseService {
         entity.setProjectId(expense.getProjectId());
         entity.setSplitId(split.getSplitId());
         entity.setAmount(amount);
-        entity.setTaxRate(expense.getTaxRate() == null ? BigDecimal.ZERO : scale(expense.getTaxRate(), 4));
+        entity.setTaxRate(expense.getTaxRate());  // taxRate 为字典值 String（V1.0.12），原样存，null 允许（税率可选）
         entity.setExpenseDate(expense.getExpenseDate());
         entity.setCategory(split.getCategory());          // 以 split 为准回填
         entity.setStatus(STATUS_NORMAL);
@@ -517,10 +517,6 @@ public class ExpenseServiceImpl implements IExpenseService {
     /** 金额 2 位小数 HALF_UP（决策 D9） */
     private static BigDecimal scale(BigDecimal v) {
         return nz(v).setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private static BigDecimal scale(BigDecimal v, int scale) {
-        return nz(v).setScale(scale, RoundingMode.HALF_UP);
     }
 
     // 保留常量区（编译期检查使用，避免 unused import）
