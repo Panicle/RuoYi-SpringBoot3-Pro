@@ -243,7 +243,7 @@ public class HonorServiceImpl implements IHonorService {
     /**
      * 校验 ref 对象存在且未删（按 refType 分表查）：
      * PROJECT → project 表 + leader_id NOT NULL 兜底
-     * RESEARCHER → project_member 表（任一未删成员行视为该人员存在；与 sys_user.user_id 关联由 D2 限定）
+     * RESEARCHER → sys_user 表（直查 user_id；del_flag='0' 由 Service 补判，因 SysUserMapper.selectUserById 不带 del_flag 过滤）
      * UNIT → cooperative_unit 表
      */
     private void validateRefObject(String refType, Long refId) {
@@ -257,8 +257,9 @@ public class HonorServiceImpl implements IHonorService {
         if (REF_TYPE_RESEARCHER.equals(refType)) {
             // D2：ref_id = sys_user.user_id；直查 sys_user 存在即视为有效。
             // 禁用账号不拦——历史荣誉可关联离职/禁用人员（审查 M2 留档）。
+            // selectUserById 不带 del_flag 过滤；Service 补判 del_flag='0' 拒绝已删用户。
             SysUser u = sysUserMapper.selectUserById(refId);
-            if (u == null) {
+            if (u == null || !"0".equals(u.getDelFlag())) {
                 throw new ServiceException("关联人员不存在");
             }
             return;
