@@ -78,5 +78,18 @@
           and month         = #{month}
           and del_flag      = '0'
     </select>
+
+    <!-- 按 (projectId, month) 查有效成员（total_rd_hours > 0），按 researcher_id 升序（算法"最后一人"由此确定） -->
+    <select id="selectMembersByProjectMonth" resultMap="RdWorktimeMonthlyResult">
+        select id, project_id, researcher_id, month,
+               total_rd_hours, cumulative_hours, del_flag,
+               create_by, create_time, update_by, update_time, remark
+        from rd_worktime_monthly
+        where project_id = #{projectId}
+          and month      = #{month}
+          and total_rd_hours &gt; 0
+          and del_flag    = '0'
+        order by researcher_id
+    </select>
 </mapper>
 </content>

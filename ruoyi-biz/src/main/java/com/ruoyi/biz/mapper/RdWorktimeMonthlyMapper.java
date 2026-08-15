@@ -26,6 +26,13 @@ public interface RdWorktimeMonthlyMapper extends BaseMapper<RdWorktimeMonthly> {
                                                      @Param("month") String month);
 
     /**
+     * 按 (projectId, month) 查全部有效工时行（total_rd_hours > 0），按 researcher_id 升序 —
+     * 算法侧用于分摊计算（任务卡 Task 3 步骤 4："最后一人"由稳定升序末位确定）。
+     */
+    List<RdWorktimeMonthly> selectMembersByProjectMonth(@Param("projectId") Long projectId,
+                                                        @Param("month") String month);
+
+    /**
      * 月度汇总分页列表（@DataScope 通道：deptAlias=d / userAlias=u，三档过滤；
      * researcher 不调用此方法，Service 走"本人相关"专用分支）。
      * SELECT vo 必须 LEFT JOIN project p + sys_dept d + sys_user u + sys_user u2（u2 取 researcherName）；

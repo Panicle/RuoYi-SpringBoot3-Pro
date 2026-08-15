@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.biz.mapper.SurchargeRateMapper">
+
+    <resultMap type="SurchargeRate" id="SurchargeRateResult">
+        <id     property="rateId"     column="rate_id"     />
+        <result property="rateName"   column="rate_name"   />
+        <result property="rateCode"   column="rate_code"   />
+        <result property="rateValue"  column="rate_value"  />
+        <result property="status"     column="status"      />
+        <result property="createBy"   column="create_by"   />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy"   column="update_by"   />
+        <result property="updateTime" column="update_time" />
+        <result property="remark"     column="remark"      />
+    </resultMap>
+
+    <!-- 算法侧加载全部 ACTIVE 项（按 rate_id 升序：最后一项由此确定） -->
+    <select id="selectActiveRates" resultMap="SurchargeRateResult">
+        select rate_id, rate_name, rate_code, rate_value, status,
+               create_by, create_time, update_by, update_time, remark
+        from surcharge_rate
+        where status   = 'ACTIVE'
+          and del_flag = '0'
+        order by rate_id
+    </select>
+</mapper>
