@@ -23,6 +23,7 @@
 | 12 | V1.0.11__expense_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-14 | ✅ 59/59语句成功（首次+幂等复查各一次）：budget_split 加 3 列（used_amount/balance/version，10列→13列）+ 存量初始化 UPDATE + 唯一索引 idx_budget_split_pc_uk（project_id,category,del_flag，PL块预检重复行→本次0条重复正常建索引）+ expense 加 4 列（split_id/status/voucher_url/version，13列→17列）+ 存量初始化 UPDATE + 索引 idx_expense_split_id + 字典 expense_status（dict_id=229，20133-20134 NORMAL/VOID）+ sys_config biz.expense.allowOverdraft=false（config_id 动态 MAX+1=7）+ 菜单 2040-2046 共 7 项（2040 C 经费管理 parent=2010 + 6 F 按钮）+ 角色挂载 30 条（任务卡正文写 31，按§2.5矩阵逐项实算为 30，矩阵优先于总数）；DB复查（budget_split 13列/唯一索引UNIQUE/expense 17列/普通索引/两存量初始化无NULL/字典2条/sys_config值false/菜单7项属性/7角色挂载30条）全部 PASS |
 | 13 | V1.0.12__fix_menu_icon_tax_rate.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 9/9语句成功（首次+幂等复查各一次）：菜单图标修复（2011 课题管理 '#'→education、2020 合作单位 '#'→peoples，用户反馈菜单栏无图标）+ expense.tax_rate 字段 DECIMAL(5,4)→VARCHAR(20)（PL块预检列类型幂等，税率改字典）+ 字典 tax_rate（dict_id=230，20135-20138 1%/3%/6%/13%）；DB复查（两菜单icon正确/列类型VARCHAR/字典4项值序）全部 PASS |
 | 14 | V1.0.13__document_approval.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 50/50语句成功（首次+幂等复查各一次）：project_document 加 2 列（submitter_id/plan_submit_date）+ 索引 idx_project_document_submitter + approval 加 2 列（round/reject_reason）+ 唯一索引 idx_approval_doc_id_uk（doc_id，PL块预检重复→本次0条重复正常建索引）+ approval_history 加 1 列（round）+ 菜单 2050-2056 共 7 项（2050 C 课题资料 parent=2010 + 6 F 按钮）+ 角色挂载 31 条（§2.4矩阵：7+7+2+2+2+6+5）；DB复查（project_document 15列/approval 15列+唯一索引UNIQUE/approval_history 13列/菜单7项属性/7角色挂载31条）全部 PASS |
+| 15 | V1.0.14__honor_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 45/45语句成功（首次+幂等复查各一次）：honor 加 2 列（certificate_no/certificate_url）+ honor_relation 加 2 列（role_desc/contribution_desc）+ ref_type 注释更新追加 UNIT 合作单位 + 字典 honor_ref_type（dict_id=231，20139-20141 PROJECT/RESEARCHER/UNIT）+ 菜单 2060-2066 共 7 项（2060 C 荣誉管理 parent=2010 order_num=6 icon=star + 6 F 按钮）+ 角色挂载 29 条（§1矩阵：7+7+3+3+3+3+3）；DB复查（honor 15列/honor_relation 12列/ref_type 注释三枚举/字典3条/菜单7项含icon/order_num/7角色挂载29条）全部 PASS |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
@@ -148,6 +149,7 @@
 | 12 | `V1.0.11__expense_module.sql` | 阶段4经费管理基线：budget_split 加 3 列（used_amount/balance/version）+ 存量初始化 + 唯一索引 idx_budget_split_pc_uk（project_id,category,del_flag，建前查重复行）+ expense 加 4 列（split_id/status/voucher_url/version）+ 存量初始化 + 索引 idx_expense_split_id + 字典 expense_status（dict_id=229，2项）+ sys_config biz.expense.allowOverdraft=false + 菜单 2040-2046（7项）+ 角色挂载 30 条 |
 | 13 | `V1.0.12__fix_menu_icon_tax_rate.sql` | 阶段4收尾修复：菜单图标修复（2011 课题管理 '#'→education、2020 合作单位 '#'→peoples）+ expense.tax_rate 字段 DECIMAL(5,4)→VARCHAR(20) + 字典 tax_rate（dict_id=230，1%/3%/6%/13%） |
 | 14 | `V1.0.13__document_approval.sql` | 阶段5资料与审批基线：project_document 加 2 列（submitter_id/plan_submit_date）+ 索引 idx_project_document_submitter + approval 加 2 列（round/reject_reason）+ 唯一索引 idx_approval_doc_id_uk（doc_id，建前查重复行）+ approval_history 加 1 列（round）+ 菜单 2050-2056（7项）+ 角色挂载 31 条 |
+| 15 | `V1.0.14__honor_module.sql` | 阶段7荣誉管理基线：honor 加 2 列（certificate_no/certificate_url）+ honor_relation 加 2 列（role_desc/contribution_desc）+ ref_type 注释追加 UNIT 合作单位 + 字典 honor_ref_type（dict_id=231，20139-20141 PROJECT/RESEARCHER/UNIT）+ 菜单 2060-2066（7项，2060 C 荣誉管理 parent=2010 order_num=6 icon=star）+ 角色挂载 29 条 |
 
 ---
 
@@ -628,4 +630,73 @@
 - 阶段5 Task 3：后端审批侧（Approval + ApprovalHistory 三件套 + 列表/history/audit + 数据权限）
 - 阶段5 Task 4：前端（资料列表 + 上传/审批/历史弹窗，分支 feature/biz-document-ui）
 - 阶段5 Task 5：冒烟（任务卡 §七 8 项）+ 回归
+
+---
+
+## V1.0.14 — 阶段7 荣誉管理基线
+
+**日期**：2026-08-15
+
+**任务卡关联**：阶段7 荣誉管理 / Task 1：V1.0.14 SQL（两表加 2+2 列 + ref_type 注释 + 字典 honor_ref_type + 菜单 2060-2066 + 角色挂载 29 条）+ devdm 幂等执行 + changelog
+
+**变更内容**：
+
+1. **honor 表加 2 列**（实际基线 13 列 → V1.0.14 后 15 列，幂等 PL 块预检 `USER_TAB_COLUMNS` 后 `EXECUTE IMMEDIATE ALTER TABLE ADD`）
+   - `certificate_no VARCHAR(100)`：证书编号
+   - `certificate_url VARCHAR(500)`：证书附件路径（`/common/upload` 相对路径）
+
+2. **honor_relation 表加 2 列**（实际基线 10 列 → V1.0.14 后 12 列）
+   - `role_desc VARCHAR(200)`：角色/名次说明（主持人、第 N 完成人等）
+   - `contribution_desc VARCHAR(500)`：贡献说明（具体做了哪些工作）
+   - **ref_type 列注释更新**（追加 UNIT 合作单位说明；COMMENT 天然幂等覆盖）：
+     - 更新前：`关联类型（PROJECT课题/RESEARCHER科研人员...`（仅前两类，原 V1.0.0 注释）
+     - 更新后：`关联类型（PROJECT课题/RESEARCHER科研人员(sys_user.user_id)/UNIT合作单位）`
+
+3. **新增字典 `honor_ref_type`**（dict_id=231，dict_code 20139–20141，3 项，dict_value 大写）
+   - `PROJECT` 课题（primary，sort 1）
+   - `RESEARCHER` 人员（success，sort 2）
+   - `UNIT` 合作单位（info，sort 3）
+   - 复用 honor_level(207) / honor_type(208)，本版本不新建不修改
+
+4. **新增菜单 7 项**（sys_menu 2060–2066，挂在 2010 科研管理下，order_num=6）
+   - 2060 C 荣誉管理（path=honor，component=biz/honor/index，perms=biz:honor:list，icon=star）
+   - 2061 F 查询（biz:honor:query）
+   - 2062 F 新增（biz:honor:add）
+   - 2063 F 修改（biz:honor:edit）
+   - 2064 F 删除（biz:honor:remove）
+   - 2065 F 导出（biz:honor:export）
+   - 2066 F 关联维护（biz:honor:relation，按 ref_type=PROJECT/RESEARCHER/UNIT 维护 honor_relation 子资源）
+
+5. **角色挂载（任务卡 §1 矩阵，共 29 条 `sys_role_menu`）**
+   - admin(1) / science_admin(101)：全部 7 项（2060–2066）
+   - leader(100) / office(102) / labor_hr(103) / dept_leader(104) / researcher(105)：只读 3 项（2060 + 2061 + 2065）
+   - **合计 7 + 7 + 3 + 3 + 3 + 3 + 3 = 29 条**（任务卡 §1 矩阵逐项实算）
+
+**幂等性设计**：
+- 列添加走 PL 匿名块预检 `USER_TAB_COLUMNS`（达梦 `ALTER TABLE ADD` 无 `IF NOT EXISTS`，照 V1.0.13 PL 块风格）后 `EXECUTE IMMEDIATE 'ALTER TABLE ... ADD ...'`；`COMMENT ON COLUMN` 嵌入 PL 块内同样只首次执行；脚本末尾对 `honor_relation.ref_type` 的 `COMMENT ON COLUMN` 天然幂等覆盖
+- 字典 / 菜单 / 角色菜单挂载走 `INSERT ... SELECT ... WHERE NOT EXISTS`（同 V1.0.6–V1.0.13）
+- **首次执行 45/45 成功；二次重跑 45/45 全绿零副作用**
+
+**DB 复查**（`python .tmp/check_v1014_after.py`，全部 PASS）：
+- honor 表现有 15 列（实际基数 13 + 2），`CERTIFICATE_NO`(VARCHAR 100) / `CERTIFICATE_URL`(VARCHAR 500) 列存在且注释对齐任务卡 §1.1
+- honor_relation 表现有 12 列（实际基数 10 + 2），`ROLE_DESC`(VARCHAR 200) / `CONTRIBUTION_DESC`(VARCHAR 500) 列存在且注释对齐任务卡 §1.2
+- honor_relation.ref_type 注释 = `'关联类型（PROJECT课题/RESEARCHER科研人员(sys_user.user_id)/UNIT合作单位）'`，含 PROJECT/RESEARCHER/UNIT 三枚举
+- `sys_dict_type` dict_id=231='荣誉关联类型'/honor_ref_type，status='0'
+- `sys_dict_data` 20139–20141（3 项，PROJECT/RESEARCHER/UNIT 大写，list_class primary/success/info，dict_sort 1/2/3）
+- `sys_menu` 2060–2066 共 7 项，类型/父菜单/order_num=6/组件/权限/名称/icon（含 2060='star'）/全部对齐任务卡
+- `sys_role_menu` 7 角色挂载总数 = 29 条（§1 矩阵实算 7+7+3+3+3+3+3=29 一致）
+
+**列数口径说明**：任务卡 §一 标注 honor/honor_relation 基线为 13/10 列、加列后 15/12 列；devdm 实际基线（V1.0.0 建表后 2026-08-11 统一补 `remark` 列）为 13/10 列，与任务卡标注一致；本脚本按任务卡**增量 2+2 列**落地，加列后期望 15/12 列。列增量与总列数均与任务卡完全对齐。
+
+**依赖**：
+- V1.0.0：`honor` / `honor_relation` 表（13 列 + 10 列）
+- V1.0.1：`sys_dict_type` / `sys_dict_data` 框架表；`honor_level`(207) / `honor_type`(208) 复用字典
+- V1.0.4：6 业务角色（100–105）
+- V1.0.6：菜单 2010（科研管理目录）
+- V1.0.9：`cooperative_unit` 表（20 列，含 unit_id 供 honor_relation REF_ID 在 ref_type=UNIT 时关联）
+
+**后续任务**：
+- 阶段7 Task 2：后端（Honor Domain + HonorRelation Domain + 列表/详情/CRUD + 证书附件上传 + 关联子资源按 ref_type 路由 PROJECT/RESEARCHER/UNIT + 数据权限双通道；前端仓 `star.svg` 图标已确认存在）
+- 阶段7 Task 3：前端（views/biz/honor/index.vue + relationDialog.vue + api/biz/honor.js；分支 feature/biz-honor-ui）
+- 阶段7 Task 4：冒烟（任务卡 §七 8 项：CRUD/证书上传/三种关联类型维护/级联逻辑删 honor_relation/数据权限/字典回显/回归）
 
