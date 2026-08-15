@@ -62,5 +62,24 @@
            and status     = 'CONFIRMED'
            and del_flag   = '0'
     </select>
+
+    <!-- 多课题×年聚合 Σalloc/Σsurcharge/Σgrand（端点 18 导出汇总用） -->
+    <select id="aggregateByProjectsYear" resultType="com.ruoyi.biz.domain.vo.RdAllocSummaryRow">
+        select project_id    as projectId,
+               month         as month,
+               sum(allocated_amount) as sumAlloc,
+               sum(surcharge_total)  as sumSurcharge,
+               sum(grand_total)      as sumGrand
+          from rd_labor_allocation
+         where del_flag = '0'
+           and project_id in
+           <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
+               #{pid}
+           </foreach>
+           and month >= concat(#{year}, '-01')
+           and month &lt;= concat(#{year}, '-12')
+         group by project_id, month
+         order by project_id, month
+    </select>
 </mapper>
 </content>

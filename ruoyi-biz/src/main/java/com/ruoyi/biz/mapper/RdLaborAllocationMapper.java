@@ -2,6 +2,7 @@ package com.ruoyi.biz.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.ruoyi.biz.domain.RdLaborAllocation;
+import com.ruoyi.biz.domain.vo.RdAllocSummaryRow;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -35,4 +36,11 @@ public interface RdLaborAllocationMapper extends BaseMapper<RdLaborAllocation> {
      */
     int countConfirmedByProjectAndMonthInt(@Param("projectId") Long projectId,
                                            @Param("month") Integer month);
+
+    /**
+     * 多课题×某年 12 月聚合 Σalloc/Σsurcharge/Σgrand（端点 18 多课题汇总用）。
+     * 按 (project_id, month) 升序稳定排序，month=YYYY-MM；调用方负责 projectIds 范围（scoped 闸门已通过）。
+     */
+    List<RdAllocSummaryRow> aggregateByProjectsYear(@Param("projectIds") List<Long> projectIds,
+                                                    @Param("year") Integer year);
 }
