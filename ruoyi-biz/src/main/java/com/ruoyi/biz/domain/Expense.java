@@ -54,9 +54,10 @@ public class Expense extends BaseEntity {
     @TableField("amount")
     private BigDecimal amount;
 
-    /** 税率 */
+    /** 税率（百分比，字典 tax_rate：1/3/6/13） */
+    @Excel(name = "税率", dictType = "tax_rate")
     @TableField("tax_rate")
-    private BigDecimal taxRate;
+    private String taxRate;
 
     /** 费用发生日期 */
     @JsonFormat(pattern = "yyyy-MM-dd")

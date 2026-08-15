@@ -547,7 +547,7 @@ def case_03_expense_success(sess) -> Tuple[Dict[str, Any], bool]:
         "projectId": pid,
         "splitId": labor_sid,
         "amount": "50000.00",
-        "taxRate": "0.13",
+        "taxRate": "13",
         "expenseDate": "2026-08-14",
         "description": "记一笔-冒烟",
         "voucherUrl": "/upload/voucher/smoke-t5.pdf",

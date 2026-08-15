@@ -21,6 +21,7 @@
 | 10 | V1.0.9__cooperative_unit.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-13 | ✅ 62/62语句成功（首次+幂等复查各一次）：cooperative_unit 加 6 树形列（parent_id/ancestors/company_type/company_category/expertise/order_num，14列→20列）+ 索引 idx_cooperative_unit_parent_id + 新表 unit_contact（15列，IDENTITY主键/审计/逻辑删）+ 索引 idx_unit_contact_unit_id + 字典 company_type（dict_id=225，20119-20120）+ company_category（dict_id=226，20121-20126）+ 菜单 2020-2027/2029 共9项 + 角色挂载 29 条（§1.4 矩阵）；DB复查（6列/索引/unit_contact结构/两字典8条/菜单/角色挂载）全部 PASS |
 | 11 | V1.0.10__contract_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-14 | ✅ 58/58语句成功（首次+幂等复查各一次）：contract 加 5 列（contract_no/party_unit_id/party_name/start_date/file_url，14列→19列）+ 索引 idx_contract_no_uk（UNIQUE on contract_no，照 project_no 模式含软删行）+ 索引 idx_contract_party_unit_id + contract_node 加 1 列 voucher_url（13列→14列）+ 字典 contract_status（dict_id=227，20127-20129 ACTIVE/EXPIRED/TERMINATED）+ node_status（dict_id=228，20130-20132 PENDING/DONE/OVERDUE）+ 菜单 2030-2036 共 7 项（2030 C 合同管理 parent=2010 + 6 F 按钮）+ 角色挂载 29 条（§1.4 矩阵）；DB复查（contract 19列/5列注释/UNIQUE索引/普通索引/contract_node voucher_url/两字典6条/菜单7项属性/7角色挂载29条）全部 PASS |
 | 12 | V1.0.11__expense_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-14 | ✅ 59/59语句成功（首次+幂等复查各一次）：budget_split 加 3 列（used_amount/balance/version，10列→13列）+ 存量初始化 UPDATE + 唯一索引 idx_budget_split_pc_uk（project_id,category,del_flag，PL块预检重复行→本次0条重复正常建索引）+ expense 加 4 列（split_id/status/voucher_url/version，13列→17列）+ 存量初始化 UPDATE + 索引 idx_expense_split_id + 字典 expense_status（dict_id=229，20133-20134 NORMAL/VOID）+ sys_config biz.expense.allowOverdraft=false（config_id 动态 MAX+1=7）+ 菜单 2040-2046 共 7 项（2040 C 经费管理 parent=2010 + 6 F 按钮）+ 角色挂载 30 条（任务卡正文写 31，按§2.5矩阵逐项实算为 30，矩阵优先于总数）；DB复查（budget_split 13列/唯一索引UNIQUE/expense 17列/普通索引/两存量初始化无NULL/字典2条/sys_config值false/菜单7项属性/7角色挂载30条）全部 PASS |
+| 13 | V1.0.12__fix_menu_icon_tax_rate.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 9/9语句成功（首次+幂等复查各一次）：菜单图标修复（2011 课题管理 '#'→education、2020 合作单位 '#'→peoples，用户反馈菜单栏无图标）+ expense.tax_rate 字段 DECIMAL(5,4)→VARCHAR(20)（PL块预检列类型幂等，税率改字典）+ 字典 tax_rate（dict_id=230，20135-20138 1%/3%/6%/13%）；DB复查（两菜单icon正确/列类型VARCHAR/字典4项值序）全部 PASS |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
@@ -144,6 +145,7 @@
 | 10 | `V1.0.9__cooperative_unit.sql` | 阶段6合作单位基线：cooperative_unit 加 6 树形列（parent_id/ancestors/company_type/company_category/expertise/order_num）+ 索引 + 新表 unit_contact（联系人=高校老师统一）+ company_type/company_category 两字典（8条）+ 菜单 2020-2027/2029（9项）+ 角色挂载 29 条 |
 | 11 | `V1.0.10__contract_module.sql` | 阶段3合同管理基线：contract 加 5 列（contract_no/party_unit_id/party_name/start_date/file_url）+ 索引 idx_contract_no_uk（UNIQUE，含软删行）+ 索引 idx_contract_party_unit_id + contract_node 加 1 列 voucher_url + 字典 contract_status（dict_id=227，3项）+ node_status（dict_id=228，3项，OVERDUE 阶段9 预留）+ 菜单 2030-2036（7项）+ 角色挂载 29 条 |
 | 12 | `V1.0.11__expense_module.sql` | 阶段4经费管理基线：budget_split 加 3 列（used_amount/balance/version）+ 存量初始化 + 唯一索引 idx_budget_split_pc_uk（project_id,category,del_flag，建前查重复行）+ expense 加 4 列（split_id/status/voucher_url/version）+ 存量初始化 + 索引 idx_expense_split_id + 字典 expense_status（dict_id=229，2项）+ sys_config biz.expense.allowOverdraft=false + 菜单 2040-2046（7项）+ 角色挂载 30 条 |
+| 13 | `V1.0.12__fix_menu_icon_tax_rate.sql` | 阶段4收尾修复：菜单图标修复（2011 课题管理 '#'→education、2020 合作单位 '#'→peoples）+ expense.tax_rate 字段 DECIMAL(5,4)→VARCHAR(20) + 字典 tax_rate（dict_id=230，1%/3%/6%/13%） |
 
 ---
 
@@ -520,4 +522,42 @@
 - 阶段4 Task 3：后端记账侧（Expense Domain/Mapper/XML + 记账/作废/冲销事务 + BudgetAlertService 双阈值预警 + /biz/expense 六端点 + 数据权限双通道）
 - 阶段4 Task 4：前端（预算概览 + 流水 + 记账/调整/作废弹窗 + 预警区，前端分支 feature/biz-expense-ui）
 - 阶段4 Task 5：冒烟（任务卡 §七 10 项：预算调整split_id不变/监管上限/记账正确性/预算不足/乐观锁并发/作废/冲销/双阈值预警/数据权限/回归）+ 回归 smoke_project / smoke_contract 关键子集
+
+---
+
+## V1.0.12 — 阶段4 收尾修复（菜单图标 + 税率字典）
+
+**日期**：2026-08-15
+
+**任务卡关联**：阶段4 收尾 / 用户反馈 4 项中的 2 项数据侧修复（菜单栏课题管理无图标；税率改字典）
+
+**变更内容**：
+
+1. **菜单图标修复**（`UPDATE sys_menu ... WHERE icon='#'`，幂等）
+   - `2011 课题管理` icon `'#'` → `education`（V1.0.6 建菜单时笔误，'#' 为无效图标致菜单栏无图标）
+   - `2020 合作单位` icon `'#'` → `peoples`（V1.0.9 同笔误）
+
+2. **税率字段改字典**
+   - `expense.tax_rate` 字段类型 `DECIMAL(5,4)` → `VARCHAR(20)`（PL 块预检 `USER_TAB_COLUMNS.DATA_TYPE` 后 `ALTER ... MODIFY`，幂等）——税率原为自由输入小数，13% 的整数百分比在 DECIMAL(5,4) 下溢出，且税率应受控于字典而非自由填写
+   - 新增字典 `tax_rate`（dict_id=230，dict_code 20135-20138，4 项）：`1`→1%(primary) / `3`→3%(info) / `6`→6%(success) / `13`→13%(warning)，dict_value 存百分比整数
+   - 后端 `Expense.taxRate` 由 `BigDecimal` 改 `String`（存字典值，加 `@Excel(dictType="tax_rate")`），与 category/status 等字典字段存法一致
+
+**幂等性设计**：
+- 菜单 icon 更新走 `UPDATE ... WHERE icon='#'`（改后不再命中，零副作用）
+- 字段类型变更走 PL 块预检列类型（已是 VARCHAR 则跳过）；`COMMENT ON COLUMN` 直接执行（重跑覆盖同值）
+- 字典走 `INSERT ... SELECT ... WHERE NOT EXISTS`
+- **首次执行 9/9 成功；二次重跑 9/9 全绿零副作用**
+
+**DB 复查**（dmPython 直查，全部 PASS）：
+- `sys_menu` 2011 icon=education、2020 icon=peoples
+- `USER_TAB_COLUMNS` expense.tax_rate DATA_TYPE='VARCHAR'
+- `sys_dict_data` tax_rate 4 项 dict_value 1/3/6/13，dict_sort 1-4
+
+**依赖**：
+- V1.0.6 / V1.0.9：菜单 2011 / 2020
+- V1.0.0 / V1.0.11：expense 表 tax_rate 列、sys_dict_type / sys_dict_data 框架表
+
+**后续任务**：
+- 前端：税率下拉（expenseDialog.vue 改 el-select + useDict('tax_rate')）+ 合作单位 tree-select 回显修复——分支 feature/biz-fix-ux
+- 阶段5 资料与审批（下一阶段）
 
