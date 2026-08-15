@@ -1,5 +1,6 @@
 package com.ruoyi.biz.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.ruoyi.biz.domain.Project;
 import com.ruoyi.biz.domain.RdLaborAllocation;
 import com.ruoyi.biz.domain.RdLaborBudget;
@@ -329,14 +330,18 @@ public class RdAllocServiceImpl implements IRdAllocService {
             if (!STATUS_CONFIRMED_STR.equals(a.getStatus())) {
                 continue;
             }
-            a.setStatus(STATUS_DRAFT_STR);
-            a.setConfirmBy(null);
-            a.setConfirmTime(null);
+            // 显式置空 confirm_by/confirm_time：updateById 走 MyBatis-Plus NOT_NULL 策略会跳过 null 字段，
+            // 故用 LambdaUpdateWrapper.set(..., null) 强制落库置空（修复冒烟 bug）
             String oldRemark = a.getRemark() == null ? "" : a.getRemark();
-            a.setRemark(prefix + reason + (oldRemark.isEmpty() ? "" : System.lineSeparator() + oldRemark));
-            a.setUpdateBy(operName);
-            a.setUpdateTime(now);
-            rdLaborAllocationMapper.updateById(a);
+            String newRemark = prefix + reason + (oldRemark.isEmpty() ? "" : System.lineSeparator() + oldRemark);
+            rdLaborAllocationMapper.update(null, new LambdaUpdateWrapper<RdLaborAllocation>()
+                    .eq(RdLaborAllocation::getAllocId, a.getAllocId())
+                    .set(RdLaborAllocation::getStatus, STATUS_DRAFT_STR)
+                    .set(RdLaborAllocation::getConfirmBy, null)
+                    .set(RdLaborAllocation::getConfirmTime, null)
+                    .set(RdLaborAllocation::getRemark, newRemark)
+                    .set(RdLaborAllocation::getUpdateBy, operName)
+                    .set(RdLaborAllocation::getUpdateTime, now));
             n++;
         }
         return n;

@@ -129,10 +129,10 @@ public class RdLaborBudgetServiceImpl implements IRdLaborBudgetService {
                 throw new ServiceException("预算金额不能为负数");
             }
 
-            // CONFIRMED 分摊批次锁定 → 拒改该月
-            if (rdLaborAllocationMapper.countConfirmedByProjectAndMonthInt(projectId, month) > 0) {
-                throw new ServiceException("[" + year + "-" + String.format("%02d", month)
-                        + "] 已确认分摊，预算不可修改");
+            // CONFIRMED 分摊批次锁定 → 拒改该月（month 列是 VARCHAR 'YYYY-MM'，拼字符串等值查询，达梦兼容）
+            String monthStr = String.format("%d-%02d", year, month);
+            if (rdLaborAllocationMapper.countConfirmedByProjectAndMonthInt(projectId, monthStr) > 0) {
+                throw new ServiceException("[" + monthStr + "] 已确认分摊，预算不可修改");
             }
 
             RdLaborBudget db = rdLaborBudgetMapper.selectByProjectYearMonth(projectId, year, month);

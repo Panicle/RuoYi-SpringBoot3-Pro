@@ -54,11 +54,12 @@
            and del_flag   = '0'
     </select>
 
-    <!-- CONFIRMED 计数（Integer 月份通道：预算 save 的 month 为 INT 1-12；预算 save 前把 month 拼成 'YYYY-MM' 传入） -->
+    <!-- CONFIRMED 计数（monthStr 通道：month 列是 VARCHAR 'YYYY-MM'，调用处把 Integer month 拼成
+         'YYYY-MM' 传进来做字符串等值；达梦不支持对 VARCHAR 列 to_char/to_number，删除避免运行时转错） -->
     <select id="countConfirmedByProjectAndMonthInt" resultType="java.lang.Integer">
         select count(1) from rd_labor_allocation
          where project_id = #{projectId}
-           and to_number(to_char(month, 'MM')) = #{month}
+           and month      = #{monthStr}
            and status     = 'CONFIRMED'
            and del_flag   = '0'
     </select>

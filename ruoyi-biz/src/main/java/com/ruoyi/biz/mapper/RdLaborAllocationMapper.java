@@ -31,11 +31,11 @@ public interface RdLaborAllocationMapper extends BaseMapper<RdLaborAllocation> {
                                         @Param("month") String month);
 
     /**
-     * 按 (projectId, month) 计数 CONFIRMED 分摊批次（Integer 月传值通道，
-     * 内部与 countConfirmedByProjectAndMonth 等价；为兼容 budget save 的 Integer month 入参）。
+     * 按 (projectId, monthStr) 计数 CONFIRMED 分摊批次（budget save 的 Integer month 由调用处拼成
+     * 'YYYY-MM' 字符串等值传入；month 列是 VARCHAR，达梦下 to_char/to_number 运行时报字符串转换错）。
      */
     int countConfirmedByProjectAndMonthInt(@Param("projectId") Long projectId,
-                                           @Param("month") Integer month);
+                                           @Param("monthStr") String monthStr);
 
     /**
      * 多课题×某年 12 月聚合 Σalloc/Σsurcharge/Σgrand（端点 18 多课题汇总用）。
