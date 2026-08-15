@@ -40,13 +40,4 @@
           and month       = #{month}
           and del_flag    = '0'
     </select>
-
-    <!-- 该月是否已锁定（CONFIRMED 分摊批次存在 → 预算拒改） -->
-    <select id="countConfirmedAllocation" resultType="java.lang.Integer">
-        select count(1) from rd_labor_allocation
-         where project_id = #{projectId}
-           and to_char(month, 'yyyy-MM') = #{month}
-           and status     = 'CONFIRMED'
-           and del_flag   = '0'
-    </select>
 </mapper>

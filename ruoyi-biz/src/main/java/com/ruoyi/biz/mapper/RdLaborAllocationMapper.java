@@ -25,12 +25,6 @@ public interface RdLaborAllocationMapper extends BaseMapper<RdLaborAllocation> {
                                                     @Param("month") String month);
 
     /**
-     * 按 (projectId, month) 计数 CONFIRMED 分摊批次（任务卡 D9：预算锁定判定）。
-     */
-    int countConfirmedByProjectAndMonth(@Param("projectId") Long projectId,
-                                        @Param("month") String month);
-
-    /**
      * 按 (projectId, monthStr) 计数 CONFIRMED 分摊批次（budget save 的 Integer month 由调用处拼成
      * 'YYYY-MM' 字符串等值传入；month 列是 VARCHAR，达梦下 to_char/to_number 运行时报字符串转换错）。
      */

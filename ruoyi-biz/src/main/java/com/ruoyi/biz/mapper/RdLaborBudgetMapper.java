@@ -31,11 +31,4 @@ public interface RdLaborBudgetMapper extends BaseMapper<RdLaborBudget> {
     RdLaborBudget selectByProjectYearMonth(@Param("projectId") Long projectId,
                                            @Param("budgetYear") Integer budgetYear,
                                            @Param("month") Integer month);
-
-    /**
-     * 按 (projectId, budgetYear, month) 计数 CONFIRMED 分摊批次是否存在
-     * （预算 save 时判定该月是否已锁定，任务卡 D9）。
-     */
-    int countConfirmedAllocation(@Param("projectId") Long projectId,
-                                 @Param("month") Integer month);
 }
