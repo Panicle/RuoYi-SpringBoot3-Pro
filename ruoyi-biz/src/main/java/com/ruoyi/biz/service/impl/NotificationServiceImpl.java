@@ -49,7 +49,7 @@ public class NotificationServiceImpl implements INotificationService {
     public int markRead(Long notifyId, String operName) {
         Notification n = checkOwned(notifyId);
         if (STATUS_READ.equals(n.getStatus()) || STATUS_CONFIRMED.equals(n.getStatus())) {
-            return 0;   // 已读/已确认，幂等
+            return 1;   // 已读/已确认，幂等成功（避免前端 toAjax(0) 误报"操作失败"）
         }
         return notificationMapper.updateRead(notifyId, SecurityUtils.getUserId(), operName);
     }
@@ -59,7 +59,7 @@ public class NotificationServiceImpl implements INotificationService {
     public int markConfirm(Long notifyId, String operName) {
         Notification n = checkOwned(notifyId);
         if (STATUS_CONFIRMED.equals(n.getStatus())) {
-            return 0;   // 已确认，幂等
+            return 1;   // 已确认，幂等成功（避免前端 toAjax(0) 误报"操作失败"）
         }
         return notificationMapper.updateConfirm(notifyId, SecurityUtils.getUserId(), operName);
     }

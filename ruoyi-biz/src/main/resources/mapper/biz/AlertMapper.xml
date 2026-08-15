@@ -216,7 +216,8 @@
            and del_flag = '0'
     </update>
 
-    <!-- D7 消除：status→RESOLVED + remark 记操作人；仅对 OPEN 行生效（已消除则 0 行） -->
+    <!-- D7 消除：status→RESOLVED + remark 记操作人；守卫覆盖 OPEN + 阶段4 遗留 BUDGET 预警
+         （UNREAD/READ/HANDLED，ref_type=NULL）——所有非 RESOLVED 状态均可消除，已消除则 0 行幂等 -->
     <update id="resolveAlert">
         update alert
            set status      = 'RESOLVED',
@@ -224,7 +225,7 @@
                update_by   = #{updateBy},
                update_time = sysdate
          where alert_id = #{alertId}
-           and status  = 'OPEN'
+           and status  in ('OPEN', 'UNREAD', 'READ', 'HANDLED')
            and del_flag = '0'
     </update>
 
