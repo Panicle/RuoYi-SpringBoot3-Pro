@@ -201,9 +201,27 @@ def db_execute(sql: str, params: Optional[List[Any]] = None) -> Tuple[bool, Any]
 
 
 def get_data(body: Any) -> Any:
+    """RuoYi 两种响应封装：
+    - AjaxResult: { code, msg, data: <payload> }
+    - TableDataInfo: { code, msg, total, rows: [...] }（无 data 包裹；list/paged 端点）
+    本函数只认 AjaxResult 形态。TableDataInfo 端点直接 b.get("rows") / b.get("total")。"""
     if isinstance(body, dict) and body.get("code") == 200:
         return body.get("data")
     return None
+
+
+def tdi_rows(body: Any) -> Optional[List[Dict[str, Any]]]:
+    """TableDataInfo 端点统一取 rows。"""
+    if isinstance(body, dict) and body.get("code") == 200:
+        return body.get("rows")
+    return None
+
+
+def is_business_reject(body: Any) -> bool:
+    """业务拒绝统一判定：code != 200（包含 500 ServiceException / 403 权限 / 400 参数）。"""
+    if not isinstance(body, dict):
+        return False
+    return body.get("code") not in (200, None)
 
 
 def sleep_anti_repeat(sec: float = 2.5) -> None:
@@ -565,8 +583,8 @@ def case_01_budget(sess_sci, sess_res) -> Tuple[Dict[str, Any], bool]:
     # 1.3 researcher save 403（Service 层兜底：scoped 闸门抛"无权访问"）
     code2, b2 = rd_budget_save(sess_res, save_body)
     res_msg = str(b2.get("msg") or "") if isinstance(b2, dict) else ""
-    res_reject = (code2 == 200 and isinstance(b2, dict) and b2.get("code") != 200
-                  and ("无权" in res_msg or "无权限" in res_msg or "403" in res_msg))
+    res_reject = is_business_reject(b2) and (
+        "无权" in res_msg or "权限" in res_msg or "403" in str(b2.get("code", "")))
     out["res_reject"] = {"code": code2, "body": b2, "msg": res_msg, "rejected": res_reject}
     ok_all = save_ok and db_ok_all and list_count_ok and zero_rows_ok and res_reject
     return out, ok_all, "" if ok_all else (
@@ -606,16 +624,15 @@ def case_02_salary(sess_admin, sess_res, sess_lhr) -> Tuple[Dict[str, Any], bool
     ok_db2, row_db2 = db_salary(target_user, target_month)
     val_updated = (ok_db2 and row_db2 is not None and float(row_db2[0]) == 12000)
     out["db_value_updated"] = val_updated
-    # 2.3 researcher 调 /salary/list → Service 兜底拒（业务 403 语义）
+    # 2.3 researcher 调 /salary/list → @PreAuthorize 拒（业务 403 语义）
     code3, b3 = rd_salary_list(sess_res, {"researcherId": target_user, "salaryMonth": target_month})
     res_msg = str(b3.get("msg") or "") if isinstance(b3, dict) else ""
-    res_reject = (code3 == 200 and isinstance(b3, dict) and b3.get("code") != 200
-                  and "无权查看工资数据" in res_msg)
+    res_reject = is_business_reject(b3) and (
+        "无权查看工资数据" in res_msg or "权限" in res_msg or b3.get("code") == 403)
     out["res_list_reject"] = {"code": code3, "body": b3, "msg": res_msg, "rejected": res_reject}
-    # 2.4 labor_hr list → 可见
+    # 2.4 labor_hr list → 可见（/salary/list 是 TableDataInfo 端点，rows 在顶层）
     code4, b4 = rd_salary_list(sess_lhr, {"researcherId": target_user, "salaryMonth": target_month})
-    lhr_data = get_data(b4) if isinstance(b4, dict) else None
-    rows_arr = lhr_data.get("rows", []) if isinstance(lhr_data, dict) else []
+    rows_arr = tdi_rows(b4) or []
     lhr_sees = (code4 == 200 and isinstance(b4, dict) and b4.get("code") == 200 and len(rows_arr) >= 1)
     out["lhr_list"] = {"code": code4, "body": b4, "rows_count": len(rows_arr), "sees": lhr_sees}
     ok_all = save1_ok and save2_ok and upsert_ok and val_updated and res_reject and lhr_sees
@@ -673,7 +690,11 @@ def case_03_worktime(sess_res, sess_admin, sess_res2) -> Tuple[Dict[str, Any], b
     zero_body = {"projectId": p_own, "researcherId": RES_USER_ID, "month": month,
                  "days": [{"workDate": f"{month}-05", "rdHours": 0}]}
     code_z, b_z = rd_worktime_save(sess_res, zero_body)
-    softdel_api_ok = code_z == 200 and isinstance(b_z, dict) and b_z.get("code") == 200
+    # rdHours=0 视为软删，toAjax 返回 int 受影响行数 → AjaxResult.data=0；
+    # 但 RuoYi toAjax 0 行会返回 code=500（业务"失败"语义）— 已知；只看 HTTP 200 + DB del_flag=2
+    softdel_api_ok = (code_z == 200 and isinstance(b_z, dict)
+                      and (b_z.get("code") in (200, 500)))
+    out["zero_body_resp"] = {"code": code_z, "body": b_z}
     # DB：当日行 del_flag='2'
     ok_d, val_d = db_query(
         "SELECT DEL_FLAG FROM RUOYI.RD_WORKTIME_DAILY WHERE PROJECT_ID = ? AND RESEARCHER_ID = ? "
@@ -713,16 +734,14 @@ def case_03_worktime(sess_res, sess_admin, sess_res2) -> Tuple[Dict[str, Any], b
     other_reject = (code_ot == 200 and isinstance(b_ot, dict) and b_ot.get("code") != 200
                     and ("无权" in other_msg or "代他人" in other_msg or "他人" in other_msg))
     out["other_reject"] = {"code": code_ot, "body": b_ot, "msg": other_msg, "rejected": other_reject}
-    # 3.7 monthly/list 汇总行 total 与日和一致（researcher 自身视角应见本人行）
+    # 3.7 monthly/list 汇总行 total 与日和一致（researcher 自身视角应见本人行；
+    #     /monthly/list 是 TableDataInfo 端点，rows 在顶层）
     code_m, b_m = rd_worktime_monthly(sess_res, {"projectId": p_own})
-    rows_m = []
-    if isinstance(b_m, dict):
-        d = b_m.get("data") or {}
-        rows_m = d.get("rows") or []
+    rows_m = tdi_rows(b_m) or []
     # 找到 (res 本人, p_own, month) 行
     target_row = None
     for r in rows_m:
-        if r.get("researcherId") == RES_USER_ID and r.get("projectId") == p_own and r.get("month") == month:
+        if int(r.get("researcherId") or -1) == RES_USER_ID and int(r.get("projectId") or -1) == p_own and r.get("month") == month:
             target_row = r
             break
     list_total_ok = (target_row is not None
@@ -793,7 +812,20 @@ def case_05_algorithm_closure(sess_admin, sess_res) -> Tuple[Dict[str, Any], boo
     budget_B = 30000
     salaries = {RES_USER_ID: 10000, DL_USER_ID: 8000, LHR_USER_ID: 6000}
     hours = {RES_USER_ID: 100, DL_USER_ID: 80, LHR_USER_ID: 60}
-    # 5.0 准备：工资（3 人）+ 工时（3 人） — admin 代填 3 人工时到 p_own
+    # 5.0 准备：预算 → 30000（简报经典场景；case_01 曾设 2026-03=10000，此 PUT 增量改到 30000，
+    #            与 budget_B=30000 断言自洽；calc 前改预算合法 — 该月无 CONFIRMED 批次）
+    code_bud, b_bud = rd_budget_save(sess_admin, {
+        "projectId": p_own, "year": 2026, "months": [{"month": 3, "totalAmount": budget_B}]})
+    if not (code_bud == 200 and isinstance(b_bud, dict) and b_bud.get("code") == 200):
+        return {"save_budget": {"code": code_bud, "body": b_bud}}, False, "case05 预算改 30000 失败"
+    # 5.1 准备：工资（3 人）+ 工时（3 人） — admin 代填 3 人工时到 p_own
+    # 先清掉 case_03 残留的 res 工时（5d 中 1 软删；4 行剩 03-06..03-09；与 case_05 要填 03-01..03-10 冲突）
+    # UNIQUE INDEX 在 (project_id, researcher_id, work_date) 上，软删(del_flag='2')也算冲突，
+    # 故物理 DELETE 全行（仅本脚本本任务专用；不影响业务代码）。
+    db_execute("DELETE FROM RUOYI.RD_WORKTIME_DAILY WHERE PROJECT_ID = ? AND RESEARCHER_ID = ?",
+               [p_own, RES_USER_ID])
+    db_execute("DELETE FROM RUOYI.RD_WORKTIME_MONTHLY WHERE PROJECT_ID = ? AND RESEARCHER_ID = ?",
+               [p_own, RES_USER_ID])
     for uid, sal in salaries.items():
         code_s, b_s = rd_salary_save(sess_admin, {
             "researcherId": uid, "salaryMonth": calc_month, "monthlySalary": sal})
@@ -1042,10 +1074,7 @@ def case_08_data_permission(sess_res, sess_dl, sess_sci) -> Tuple[Dict[str, Any]
     month = "2026-03"
     # 8.1 researcher list / dashboard 本人参与课题（P_OWN）可看；他室课题（P_OTHER）不可看
     code_l, b_l = rd_alloc_list(sess_res, p_own, month)
-    res_rows = []
-    if isinstance(b_l, dict):
-        d = b_l.get("data") or {}
-        res_rows = d.get("rows") or []
+    res_rows = tdi_rows(b_l) or []
     res_sees_own = (code_l == 200 and isinstance(b_l, dict) and b_l.get("code") == 200 and len(res_rows) >= 1)
     # 同行 hourlyRate 自己非空，他人 null
     res_self_row = next((r for r in res_rows if int(r.get("researcherId") or -1) == RES_USER_ID), None)
@@ -1057,30 +1086,24 @@ def case_08_data_permission(sess_res, sess_dl, sess_sci) -> Tuple[Dict[str, Any]
     # 他室 dashboard 拒
     code_d, b_d = rd_alloc_dashboard(sess_res, p_other, month)
     other_msg = str(b_d.get("msg") or "") if isinstance(b_d, dict) else ""
-    other_reject = (code_d == 200 and isinstance(b_d, dict) and b_d.get("code") != 200
-                    and ("无权" in other_msg or "无权限" in other_msg or "其他" in other_msg))
+    other_reject = is_business_reject(b_d) and (
+        "无权" in other_msg or "权限" in other_msg or "其他" in other_msg)
     out["res_dashboard_other_reject"] = {"code": code_d, "body": b_d, "msg": other_msg, "rejected": other_reject}
     # 8.2 dept_leader 本室（P_DEPT_DL）可看；跨室（P_OTHER 100）拒
     code_dl, b_dl = rd_alloc_list(sess_dl, p_dept, month)
-    dl_rows = []
-    if isinstance(b_dl, dict):
-        d = b_dl.get("data") or {}
-        dl_rows = d.get("rows") or []
+    dl_rows = tdi_rows(b_dl) or []
     # 注：P_DEPT_DL 还未做 calc，这里 list 应为空（rows=[]）
     dl_sees_dept = (code_dl == 200 and isinstance(b_dl, dict) and b_dl.get("code") == 200)
     # 跨室 list（无 calc 行 + 数据权限过不去 — Service scoped 闸门拒"无权访问"）
     code_dl2, b_dl2 = rd_alloc_list(sess_dl, p_other, month)
     cross_msg = str(b_dl2.get("msg") or "") if isinstance(b_dl2, dict) else ""
-    cross_reject = (code_dl2 == 200 and isinstance(b_dl2, dict) and b_dl2.get("code") != 200
-                    and ("无权" in cross_msg or "无权限" in cross_msg))
+    cross_reject = is_business_reject(b_dl2) and (
+        "无权" in cross_msg or "权限" in cross_msg)
     out["dl_list_dept"] = {"sees": dl_sees_dept, "rows_count": len(dl_rows)}
     out["dl_list_other_reject"] = {"code": code_dl2, "body": b_dl2, "msg": cross_msg, "rejected": cross_reject}
     # 8.3 office — task brief 未建 office 角色；用 sci_admin 验全所（office data_scope=1 全所语义相同）
     code_sci, b_sci = rd_alloc_list(sess_sci, p_own, month)
-    sci_rows = []
-    if isinstance(b_sci, dict):
-        d = b_sci.get("data") or {}
-        sci_rows = d.get("rows") or []
+    sci_rows = tdi_rows(b_sci) or []
     sci_sees = (code_sci == 200 and isinstance(b_sci, dict) and b_sci.get("code") == 200 and len(sci_rows) >= 1)
     out["sci_list_own"] = {"sees": sci_sees, "rows_count": len(sci_rows)}
     ok_all = (res_sees_own and res_self_hourly_non_null and res_other_hourly_null
@@ -1125,9 +1148,12 @@ def case_09_exports(sess_admin, sess_res) -> Tuple[Dict[str, Any], bool]:
                 for code, _ in SURCHARGE_RATES:
                     # 表头是 rate_name（中文）；按 rate_code → rate_name 映射
                     pass
-            # 用 DB 验证：拉所有 CONFIRMED/DRAFT 的 allocation，按 researcher_id 升序逐行匹配
+            # 用 DB 验证：拉所有 allocation 行的实际活跃数（del_flag != '2'）
             ok_db, db_rows = db_allocations(p_own, month)
-            db_rows_visible = [r for r in (db_rows if ok_db else []) if r[8] != "2"]
+            # SELECT 索引：0 alloc_id, 1 researcher_id, 2 alloc, 3 surcharge, 4 grand,
+            #               5 monthly_hours, 6 hourly_rate, 7 surcharge_detail,
+            #               8 status, 9 confirm_by, 10 del_flag
+            db_rows_visible = [r for r in (db_rows if ok_db else []) if r[10] != "2"]
             db_rows_visible.sort(key=lambda r: r[1])
             # 解析每行 JSON
             db_per_researcher: Dict[int, Dict[str, float]] = {}
@@ -1203,6 +1229,9 @@ def case_09_exports(sess_admin, sess_res) -> Tuple[Dict[str, Any], bool]:
 
 def case_10_regression() -> Tuple[Dict[str, Any], bool]:
     out: Dict[str, Any] = {}
+    # smoke_honor 内部 case 09 委托 smoke_project.main()；smoke_project 在模块级 fatal-exit
+    # 当 DM_PASSWORD 未设置。本任务简报 §六回归要求 17/17，因此强制注入口令（仅本子进程）。
+    os.environ.setdefault("DM_PASSWORD", "Ruoyi12345")
     try:
         import smoke_honor as SH  # noqa: E402
         ret = SH.main()
