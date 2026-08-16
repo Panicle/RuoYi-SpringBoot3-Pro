@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ruoyi.biz.domain.UserProfile;
 import com.ruoyi.biz.mapper.UserProfileMapper;
 import com.ruoyi.biz.service.IUserProfileService;
+import com.ruoyi.common.annotation.DataScope;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.bean.BeanValidators;
@@ -37,6 +38,16 @@ public class UserProfileServiceImpl extends ServiceImpl<UserProfileMapper, UserP
     @Override
     public List<UserProfile> selectUserProfileList(UserProfile researcher) {
         return userProfileMapper.selectUserProfileViewList(researcher);
+    }
+
+    /**
+     * 对话精灵人员查询：@DataScope 注入 params.dataScope（XML 别名 u=sys_user / d=sys_dept），
+     * admin 与 data_scope=1 角色全量；dept_leader(3) 本部门；researcher(5) 仅本人。
+     */
+    @Override
+    @DataScope(deptAlias = "d", userAlias = "u")
+    public List<UserProfile> selectChatUserList(UserProfile query) {
+        return userProfileMapper.selectChatUserList(query);
     }
 
     @Override

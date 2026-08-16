@@ -97,4 +97,12 @@ public class UserProfile extends BaseEntity {
     /** 部门名称（来自 sys_dept.dept_name，列表展示） */
     @TableField(exist = false)
     private String deptName;
+
+    /** 登录账号（来自 sys_user.user_name，对话精灵人员查询展示） */
+    @TableField(exist = false)
+    private String userName;
+
+    /** 手机号（来自 sys_user.phonenumber，对话精灵人员查询展示） */
+    @TableField(exist = false)
+    private String phonenumber;
 }

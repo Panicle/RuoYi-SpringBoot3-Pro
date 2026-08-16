@@ -30,4 +30,13 @@ public interface UserProfileMapper extends BaseMapper<UserProfile> {
      * @return 科研人员档案
      */
     public UserProfile selectUserProfileViewById(Long profileId);
+
+    /**
+     * 对话精灵人员查询：以 sys_user 为主表（含未建档案账号），LEFT JOIN 档案与部门。
+     * 数据范围过滤由 Service 层 @DataScope(deptAlias="d", userAlias="u") 注入 params.dataScope。
+     *
+     * @param query 查询条件（nickName 同时模糊匹配昵称与登录名）
+     * @return 人员列表（userName/nickName/deptName + 档案字段，未建档字段为 null）
+     */
+    public List<UserProfile> selectChatUserList(UserProfile query);
 }

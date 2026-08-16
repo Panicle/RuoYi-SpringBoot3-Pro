@@ -33,8 +33,8 @@ except Exception:  # pragma: no cover
     dmPython = None
 
 BASE_URL = os.environ.get("BASE_URL", "http://127.0.0.1:8087")
-ADMIN_USER = "admin"
-ADMIN_PASS = "admin123"
+ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
+ADMIN_PASS = os.environ.get("ADMIN_PASS", "admin123")
 
 DM_PASSWORD = os.environ.get("DM_PASSWORD", "Ruoyi12345")
 DM_CONN_KW = dict(user="SYSDBA", password=DM_PASSWORD, server="localhost", port=5236)

@@ -22,6 +22,15 @@ public interface IUserProfileService extends IService<UserProfile> {
     public List<UserProfile> selectUserProfileList(UserProfile researcher);
 
     /**
+     * 对话精灵人员查询（sys_user 主表 + 档案 LEFT JOIN；@DataScope 三档：
+     * data_scope=1 全部 / 3 本部门 / 5 仅本人）
+     *
+     * @param query 查询条件（nickName 模糊匹配昵称或登录名，可空）
+     * @return 人员列表（含未建档账号，档案字段可能为 null）
+     */
+    public List<UserProfile> selectChatUserList(UserProfile query);
+
+    /**
      * 查询单条科研人员档案（含关联信息）
      *
      * @param profileId 档案ID

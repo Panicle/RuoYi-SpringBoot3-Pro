@@ -4,6 +4,7 @@ import com.ruoyi.biz.domain.Approval;
 import com.ruoyi.biz.domain.Notification;
 import com.ruoyi.biz.domain.Project;
 import com.ruoyi.biz.domain.RdWorktimeMonthly;
+import com.ruoyi.biz.domain.UserProfile;
 import com.ruoyi.biz.domain.vo.ConfirmCard;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
@@ -42,6 +43,7 @@ public class ChatTools {
     private final IApprovalService approvalService;
     private final INotificationService notificationService;
     private final IRdWorktimeService rdWorktimeService;
+    private final IUserProfileService userProfileService;
     private final ChatConfirmService chatConfirmService;
 
     // ========================================================
@@ -197,6 +199,42 @@ public class ChatTools {
         return sb.toString();
     }
 
+    /**
+     * 查询人员信息（sys_user 主表 + 科研档案 LEFT JOIN；@DataScope 三档：
+     * data_scope=1 全部 / dept_leader 本部门 / researcher 仅本人）
+     */
+    @Tool(description = "查询人员信息（返回姓名/登录账号/部门/职称/学历/学位/专业/研究方向/联系方式），"
+            + "参数 keyword 为姓名或登录账号关键词，可省略（省略查当前用户数据范围内全部人员）。")
+    public String queryUser(
+            @ToolParam(required = false, description = "姓名或登录账号关键词，可省略") String keyword) {
+        UserProfile query = new UserProfile();
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            query.setNickName(keyword.trim());
+        }
+        List<UserProfile> list = userProfileService.selectChatUserList(query);
+        if (list == null || list.isEmpty()) {
+            return keyword == null || keyword.trim().isEmpty()
+                    ? "数据范围内暂无人员" : "未找到人员[" + keyword.trim() + "]";
+        }
+        StringBuilder sb = new StringBuilder("人员 " + list.size() + " 名（展示前 " + Math.min(list.size(), MAX_ROWS) + " 名）：");
+        int n = 0;
+        for (UserProfile u : list) {
+            if (n++ >= MAX_ROWS) {
+                break;
+            }
+            sb.append("\n").append(n).append(". ").append(safe(u.getNickName()))
+              .append("（").append(safe(u.getUserName())).append("）")
+              .append(" | 部门：").append(safe(u.getDeptName()))
+              .append(" | 职称：").append(safe(u.getTitleLevel()))
+              .append(" | 学历：").append(safe(u.getEduLevel()))
+              .append(" | 学位：").append(safe(u.getDegree()))
+              .append(" | 专业：").append(safe(u.getMajor()))
+              .append(" | 研究方向：").append(safe(u.getResearchDirection()))
+              .append(" | 电话：").append(safe(firstNonEmpty(u.getPhonenumber(), u.getOfficePhone())));
+        }
+        return sb.toString();
+    }
+
     // ========================================================
     //  写工具（需确认卡片，不直接落库）
     // ========================================================
@@ -281,6 +319,14 @@ public class ChatTools {
 
     private static String safe(String s) {
         return s == null ? "" : s;
+    }
+
+    /** 取第一个非空字符串（queryUser 电话展示：手机号优先，无则办公电话） */
+    private static String firstNonEmpty(String a, String b) {
+        if (a != null && !a.trim().isEmpty()) {
+            return a;
+        }
+        return b == null ? "" : b;
     }
 
     private static String val(BigDecimal v) {

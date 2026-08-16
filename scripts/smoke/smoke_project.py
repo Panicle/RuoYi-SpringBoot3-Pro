@@ -29,8 +29,8 @@ except Exception:  # pragma: no cover
     dmPython = None  # 标记不可用，DB 用例将明确报缺失
 
 BASE_URL = os.environ.get("BASE_URL", "http://127.0.0.1:8087")
-ADMIN_USER = "admin"
-ADMIN_PASS = "admin123"
+ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
+ADMIN_PASS = os.environ.get("ADMIN_PASS", "admin123")
 
 # 达梦连接（口令走环境变量 DM_PASSWORD，不落明文；运行前 export DM_PASSWORD=xxx）
 DM_PASSWORD = os.environ.get("DM_PASSWORD")
