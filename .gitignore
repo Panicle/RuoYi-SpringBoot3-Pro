@@ -58,3 +58,6 @@ application-demoprod.yml
 
 # 本地 jar 文件（防止误提交大文件）
 /*.jar
+
+# 本地启动脚本（含 LLM key，不入库）
+run-devdm-local.bat
