@@ -102,6 +102,8 @@ public class SecurityConfig {
                             .requestMatchers(HttpMethod.GET, "/", "/*.html", "/**.html", "/**.css", "/**.js", "/profile/**").permitAll()
                             .requestMatchers("/swagger-ui.html", "/v3/api-docs/**", "/swagger-ui/**", "/druid/**").permitAll()
                             .requestMatchers("/magic/**").permitAll()
+                            // 对话精灵 WebSocket /ws/pet：端点内做 token 鉴权（无效 token 握手即关闭），故放行握手
+                            .requestMatchers("/ws/pet").permitAll()
                             // 除上面外的所有请求全部需要鉴权认证
                             .anyRequest().authenticated();
                 })

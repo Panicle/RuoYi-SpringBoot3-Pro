@@ -25,6 +25,7 @@
 | 14 | V1.0.13__document_approval.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 50/50语句成功（首次+幂等复查各一次）：project_document 加 2 列（submitter_id/plan_submit_date）+ 索引 idx_project_document_submitter + approval 加 2 列（round/reject_reason）+ 唯一索引 idx_approval_doc_id_uk（doc_id，PL块预检重复→本次0条重复正常建索引）+ approval_history 加 1 列（round）+ 菜单 2050-2056 共 7 项（2050 C 课题资料 parent=2010 + 6 F 按钮）+ 角色挂载 31 条（§2.4矩阵：7+7+2+2+2+6+5）；DB复查（project_document 15列/approval 15列+唯一索引UNIQUE/approval_history 13列/菜单7项属性/7角色挂载31条）全部 PASS |
 | 15 | V1.0.14__honor_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 45/45语句成功（首次+幂等复查各一次）：honor 加 2 列（certificate_no/certificate_url）+ honor_relation 加 2 列（role_desc/contribution_desc）+ ref_type 注释更新追加 UNIT 合作单位 + 字典 honor_ref_type（dict_id=231，20139-20141 PROJECT/RESEARCHER/UNIT）+ 菜单 2060-2066 共 7 项（2060 C 荣誉管理 parent=2010 order_num=6 icon=star + 6 F 按钮）+ 角色挂载 29 条（§1矩阵：7+7+3+3+3+3+3）；DB复查（honor 15列/honor_relation 12列/ref_type 注释三枚举/字典3条/菜单7项含icon/order_num/7角色挂载29条）全部 PASS |
 | 16 | V1.0.15__rd_module.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 78/78语句成功（首次+幂等复查各一次）：rd_labor_allocation 加 5 列（monthly_hours/hourly_rate/surcharge_detail/confirm_by/confirm_time，15列→20列）+ 3 非唯一索引（idx_rd_alloc_pm/idx_rd_worktime_daily_prd/idx_rd_salary_rm）+ 菜单 2070-2085 共 14 项（2070 C 工时填报 icon=time order_num=7 + 2071-2072 F；2075 C 工资与预算 icon=money order_num=8 + 2076-2079 F；2080 C 分摊管理 icon=chart order_num=9 + 2081-2085 F）+ 角色挂载 56 条（§4矩阵：14+14+14+3+5+1+5）；DB复查（rd_labor_allocation 20列/3索引/菜单14项含icon+path+component/7角色挂载56条/surcharge_rate 未触碰 10行 SUM=0.4986）全部 PASS |
+| 17 | V1.0.16__alert_notify.sql | devdm (F:\dmdbms\data\RUOYI) | Claude Code (dmPython) | 2026-08-15 | ✅ 58/58语句成功（首次+幂等复查各一次）：alert 加 5 列（ref_type/biz_key/round/first_time/last_time，13列→18列）+ alert.status 默认值 'UNREAD'→'OPEN' 且注释改 + 非唯一索引 idx_alert_biz_key + notification 加 2 列（status/confirm_time，11列→13列）+ is_read 注释追加"兼容保留" + 字典 232/233（alert_status 20142-20143 + notify_status 20144-20146 共5项）+ 菜单 2090-2095 共 6 项（2090 C 预警中心 icon=monitor order_num=10 + 2093 C 我的通知 icon=message order_num=11 + 4 F 按钮）+ 角色挂载 34 条（§5矩阵：6x3+4x4）；DB复查（alert 18列含新5列/status 默认 OPEN 注释对/索引/notification 13列/status 默认 UNREAD/is_read 注释/字典5项/菜单6项含icon+path+component/7角色挂载34条）全部 PASS |
 
 **2026-08-11 执行时修正的达梦兼容问题**（已回写脚本）：
 1. `comment` 是达梦保留字 → approval / approval_history 的审批意见列改名 **`comment_text`**（后续阶段5实体请用 `@TableField("comment_text")`）
@@ -778,4 +779,83 @@
 - 阶段8 Task 3：后端业务侧（`RdWorktimeServiceImpl` 实现 D9 全套校验+月汇总重算、`RdSalaryServiceImpl` 工资月度 upsert+导入导出、`RdAllocationServiceImpl` 分摊批次计算+确认+撤销+JSON 写 `surcharge_detail`、6 Controller 拆分）
 - 阶段8 Task 4：前端（`views/biz/rd/{worktime,salary,allocation}/index.vue` + 3 api + 6 dialog；icon 复用 `time.svg`/`money.svg`/`chart.svg`）
 - 阶段8 Task 5：冒烟（任务卡 §七 12 项 + 回归）+ surcharge_rate 10 项 ACTIVE 比例透传校验
+
+---
+
+## V1.0.16 — 阶段9 预警引擎与对话精灵-预警通知基线
+
+**日期**：2026-08-15
+
+**任务卡关联**：阶段9 预警引擎与对话精灵 / Task 1：V1.0.16 SQL（alert 加 5 列 + status 默认值/注释改 + 索引 + notification 加 2 列 + is_read 注释追加 + 字典 232/233 + 菜单 2090-2095 + 角色挂载 34 条）+ devdm 幂等执行 + changelog
+
+**变更内容**：
+
+1. **alert 表加 5 列**（实际基线 13 列 → V1.0.16 后 18 列，幂等 PL 块预检 `USER_TAB_COLUMNS` 后 `EXECUTE IMMEDIATE ALTER TABLE ADD`，照 V1.0.14/15 PL 块风格）
+   - `ref_type VARCHAR(20)`：关联业务对象类型（PROJECT/CONTRACT/BUDGET/DOCUMENT）
+   - `biz_key VARCHAR(200)`：业务唯一键（`alert_type:ref_type:ref_id:周期标识`，幂等去重用）
+   - `round INT DEFAULT 1`：触发轮次（同 biz_key 每次重新触发 +1，首次 1）
+   - `first_time TIMESTAMP`：首次生成时间
+   - `last_time TIMESTAMP`：最近命中扫描时间
+
+2. **alert.status 默认值与注释变更**（幂等）
+   - 默认值 `'UNREAD'` → `'OPEN'`：PL 块预检 `USER_TAB_COLUMNS.DATA_DEFAULT != 'OPEN'` 后执行 `ALTER COLUMN status SET DEFAULT 'OPEN'`（简报要求语法，已探测达梦支持；DATA_DEFAULT 含引号文本 `'OPEN'` 比对）
+   - 注释由 `'状态（UNREAD未读/READ已读/HANDLED已处理）'` 改为 `'OPEN生效/RESOLVED已消除'`：`COMMENT ON COLUMN` 覆盖式天然幂等
+
+3. **新增非唯一索引 `idx_alert_biz_key(biz_key)`**（PL 块预检 `USER_INDEXES` 幂等创建，支持预警去重扫描按 biz_key 查命中）
+
+4. **notification 表加 2 列**（实际基线 11 列 → V1.0.16 后 13 列，幂等 PL 块预检）
+   - `status VARCHAR(20) DEFAULT 'UNREAD'`：通知状态（UNREAD未读/READ已读/CONFIRMED已确认）
+   - `confirm_time TIMESTAMP`：确认时间
+   - `is_read` 注释追加"（兼容保留，新代码用 status）"：`COMMENT ON COLUMN` 覆盖式幂等，直接写最终完整值
+
+5. **新增字典 2 类型 5 项**（INSERT 前查存在性幂等）
+   - `sys_dict_type`：dict_id=232 '预警状态'/'alert_status'；dict_id=233 '通知状态'/'notify_status'
+   - `sys_dict_data`：
+     - alert_status：20142/1/生效/OPEN/success、20143/2/已消除/RESOLVED/info
+     - notify_status：20144/1/未读/UNREAD/warning、20145/2/已读/READ/primary、20146/3/已确认/CONFIRMED/success
+
+6. **新增菜单 6 项**（sys_menu 2090-2095，C 菜单 parent=2010 科研管理，order_num=10/11）
+   - 2090 C 预警中心（path=alert，component=biz/alert/index，perms=biz:alert:list，icon=monitor，order_num=10）
+   - 2091 F 预警详情（biz:alert:query，order_num=1）
+   - 2092 F 预警消除（biz:alert:resolve，order_num=2）
+   - 2093 C 我的通知（path=notify，component=biz/alert/notify，perms=biz:alert:notify，icon=message，order_num=11）
+   - 2094 F 标记已读（biz:alert:read，order_num=1）
+   - 2095 F 确认（biz:alert:confirm，order_num=2）
+   - **icon 说明**：任务卡要求 2090=bell、2093=message；勘查前端 svg 目录 `RuoYi-SpringBoot3-ElementPlus/src/assets/icons/svg/`：`message.svg` 存在直接用，`bell.svg` 不存在，按简报"缺则选语义接近并在 changelog 说明"替换为 `monitor.svg`（监控，最接近"预警"语义；Task 2 前端可视需要后续补 bell 图标再换回）
+
+7. **角色挂载（任务卡 §5 矩阵，共 34 条 `sys_role_menu`，逐项实算）**
+   - admin(1) / science_admin(101) / leader(100)：各挂 6 项（2090-2095 全量 C+F，含消除/确认权）
+   - dept_leader(104) / researcher(105) / office(102) / labor_hr(103)：各挂 4 项（2090/2091/2093/2094 只读）
+   - **合计 6×3 + 4×4 = 34 条**
+
+8. **不创建新表**：alert/notification 已在 V1.0.0 建立；本版本 DDL 变更仅两表加列 + 索引 + status 默认值
+
+**幂等性设计**：
+- 列添加走 PL 匿名块预检 `USER_TAB_COLUMNS` 后 `EXECUTE IMMEDIATE 'ALTER TABLE ... ADD ...'`；`COMMENT ON COLUMN` 嵌入 PL 块内同样只首次执行
+- 非唯一索引走 PL 匿名块预检 `USER_INDEXES` 后 `EXECUTE IMMEDIATE 'CREATE INDEX ...'`
+- status 默认值改动走 PL 匿名块预检 `DATA_DEFAULT` 后 `ALTER COLUMN SET DEFAULT`（探测确认达梦支持）；status/is_read 注释改动走 `COMMENT ON COLUMN` 覆盖式（天然幂等）
+- 字典 / 菜单 / 角色菜单挂载走 `INSERT ... SELECT ... WHERE NOT EXISTS`
+- **首次执行 58/58 成功；二次重跑 58/58 全绿零副作用**
+
+**DB 复查**（`python .tmp/check_v1016_after.py`，17/17 全 PASS）：
+- alert 表现有 18 列（实际基数 13 + 5），`REF_TYPE`(VARCHAR 20) / `BIZ_KEY`(VARCHAR 200) / `ROUND`(INT DEFAULT 1) / `FIRST_TIME`(TIMESTAMP) / `LAST_TIME`(TIMESTAMP) 列存在且注释对齐任务卡 §1
+- `alert.status` 默认值 `'OPEN'`、注释 `'OPEN生效/RESOLVED已消除'`
+- `IDX_ALERT_BIZ_KEY` 存在 on ALERT（NONUNIQUE）
+- notification 表现有 13 列（实际基数 11 + 2），`STATUS`(VARCHAR 20 DEFAULT 'UNREAD') / `CONFIRM_TIME`(TIMESTAMP) 存在；`is_read` 注释含"兼容保留，新代码用 status"
+- `sys_dict_type` 232/233（预警状态/通知状态）；`sys_dict_data` 20142-20146 五条值/序/list_class 全部对齐
+- `sys_menu` 2090-2095 共 6 项，类型(C/F)/父菜单(2010/2090/2093)/order_num(C=10/11，F=1/2)/组件/权限/icon(2090=monitor/2093=message)/路径(alert/notify)全部对齐任务卡 §3
+- `sys_role_menu` 7 角色挂载总数 = 34 条（§5 矩阵实算 6×3+4×4=34 一致）
+
+**列数口径说明**：任务卡 §1 标注 `notification` 基线 10 列、加列后 12 列；devdm 实际基线（V1.0.0 建表后 2026-08-11 统一补 `remark` 列 + 阶段已有 `READ_TIME`）为 11 列，故本脚本按任务卡**增量 2 列**落地，加列后期望 13 列。列增量与任务卡完全一致，仅"加列后总列数"随实际基数上浮 1 列。
+
+**依赖**：
+- V1.0.0：`alert` / `notification` 表
+- V1.0.1：`sys_dict_type` / `sys_dict_data` 框架表；`alert_type` / `alert_level` 字典复用（20142 起未占用）
+- V1.0.4：6 业务角色（100-105）
+- V1.0.6：菜单 2010（科研管理目录）
+
+**后续任务**：
+- 阶段9 Task 2：后端（Alert Domain + Notification Domain + 定时扫描引擎 + 幂等去重按 biz_key + 消除/已读/确认端点；菜单 icon=monitor 为语义替换，可后续补 bell 图标）
+- 阶段9 Task 3：前端（views/biz/alert/{index,notify}.vue + api；复用 monitor.svg/message.svg）
+- 阶段9 Task 4：冒烟（任务卡 §七 清单：扫描触发/幂等去重/消除流转/通知已读确认/字典回显/回归）
 

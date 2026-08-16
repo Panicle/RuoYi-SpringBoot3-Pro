@@ -6,16 +6,23 @@
         <id     property="alertId"     column="alert_id"     />
         <result property="alertType"   column="alert_type"   />
         <result property="refId"       column="ref_id"       />
+        <result property="refType"     column="ref_type"     />
         <result property="alertLevel"  column="alert_level"  />
         <result property="title"       column="title"        />
         <result property="content"     column="content"      />
         <result property="status"      column="status"       />
+        <result property="bizKey"      column="biz_key"      />
+        <result property="round"       column="round"        />
+        <result property="firstTime"   column="first_time"   />
+        <result property="lastTime"    column="last_time"    />
         <result property="delFlag"     column="del_flag"     />
         <result property="createBy"    column="create_by"    />
         <result property="createTime"  column="create_time"  />
         <result property="updateBy"    column="update_by"    />
         <result property="updateTime"  column="update_time"  />
         <result property="remark"      column="remark"       />
+        <result property="refName"     column="ref_name"     />
+        <result property="leaderId"    column="leader_id"    />
         <result property="projectId"   column="project_id"   />
         <result property="projectNo"   column="project_no"   />
         <result property="projectName" column="project_name" />
@@ -81,5 +88,194 @@
            and ref_id     = #{refId}
            and del_flag   = '0'
            and status in ('UNREAD', 'READ')
+    </select>
+
+    <!-- ========================================================
+         阶段9 通用预警视图：ref 对象（合同节点/课题/资料）→ project 关联链。
+         @DataScope deptAlias=d / userAlias=u：d = sys_dept、u = sys_user 专供数据权限。
+         多路 LEFT JOIN 按 ref_type 分派（CONTRACT→node→contract→project / PROJECT→project 直连 /
+         DOCUMENT→doc→project / 旧 BUDGET(ref_type 空)→budget_split→project），COALESCE 聚合 project。 -->
+    <sql id="selectAlertVo">
+        select a.alert_id, a.alert_type, a.ref_id, a.ref_type, a.alert_level, a.title, a.content,
+               a.status, a.biz_key, a.round, a.first_time, a.last_time, a.del_flag,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
+               case a.ref_type
+                   when 'CONTRACT' then cn.node_name
+                   when 'PROJECT'  then p_pj.project_name
+                   when 'DOCUMENT' then pd.file_name
+                   else bs.category
+               end as ref_name,
+               coalesce(p_cn.project_id, p_pj.project_id, p_pd.project_id, p_bs.project_id) as project_id,
+               coalesce(p_cn.project_no, p_pj.project_no, p_pd.project_no, p_bs.project_no) as project_no,
+               coalesce(p_cn.project_name, p_pj.project_name, p_pd.project_name, p_bs.project_name) as project_name,
+               coalesce(p_cn.leader_id, p_pj.leader_id, p_pd.leader_id, p_bs.leader_id) as leader_id
+        from alert a
+        left join contract_node cn on a.ref_type = 'CONTRACT' and a.ref_id = cn.node_id and cn.del_flag = '0'
+        left join contract c       on cn.contract_id = c.contract_id and c.del_flag = '0'
+        left join project p_cn     on c.project_id = p_cn.project_id and p_cn.del_flag = '0'
+        left join project p_pj     on a.ref_type = 'PROJECT' and a.ref_id = p_pj.project_id and p_pj.del_flag = '0'
+        left join project_document pd on a.ref_type = 'DOCUMENT' and a.ref_id = pd.doc_id and pd.del_flag = '0'
+        left join project p_pd     on pd.project_id = p_pd.project_id and p_pd.del_flag = '0'
+        left join budget_split bs  on a.ref_type is null and a.alert_type = 'BUDGET' and a.ref_id = bs.split_id and bs.del_flag = '0'
+        left join project p_bs     on bs.project_id = p_bs.project_id and p_bs.del_flag = '0'
+        left join sys_dept d       on d.dept_id = coalesce(p_cn.dept_id, p_pj.dept_id, p_pd.dept_id, p_bs.dept_id)
+        left join sys_user u       on u.user_id = coalesce(p_cn.leader_id, p_pj.leader_id, p_pd.leader_id, p_bs.leader_id)
+    </sql>
+
+    <!-- 通用列表筛选：alertType/alertLevel/status/refType -->
+    <sql id="alertFilters">
+        a.del_flag = '0'
+        <if test="alertType != null and alertType != ''"> and a.alert_type = #{alertType} </if>
+        <if test="alertLevel != null and alertLevel != ''"> and a.alert_level = #{alertLevel} </if>
+        <if test="status != null and status != ''"> and a.status = #{status} </if>
+        <if test="refType != null and refType != ''"> and a.ref_type = #{refType} </if>
+    </sql>
+
+    <!-- 通用预警列表：走 @DataScope 通道（deptAlias=d, userAlias=u），researcher 不调用此方法 -->
+    <select id="selectAlertList" parameterType="Alert" resultMap="AlertResult">
+        <include refid="selectAlertVo"/>
+        <where>
+            <include refid="alertFilters"/>
+            <!-- 数据范围过滤（@DataScope 注入 params.dataScope） -->
+            ${params.dataScope}
+        </where>
+        order by a.alert_id desc
+    </select>
+
+    <!-- 通用预警列表（researcher 专用）：ref 对象所属课题 leader_id = me OR 课题成员含 me -->
+    <select id="selectAlertListForResearcher" parameterType="Alert" resultMap="AlertResult">
+        <include refid="selectAlertVo"/>
+        <where>
+            <include refid="alertFilters"/>
+            and (
+                coalesce(p_cn.leader_id, p_pj.leader_id, p_pd.leader_id, p_bs.leader_id) = #{params.selfUserId}
+                or exists (
+                    select 1 from project_member m
+                     where m.project_id = coalesce(p_cn.project_id, p_pj.project_id, p_pd.project_id, p_bs.project_id)
+                       and m.user_id    = #{params.selfUserId}
+                       and m.del_flag   = '0'
+                )
+            )
+        </where>
+        order by a.alert_id desc
+    </select>
+
+    <!-- 通用预警详情：走 @DataScope 通道（probe 携带 alertId，@DataScope 注入 params.dataScope） -->
+    <select id="selectAlertById" parameterType="Alert" resultMap="AlertResult">
+        <include refid="selectAlertVo"/>
+        <where>
+            a.del_flag = '0' and a.alert_id = #{alertId}
+            <if test="params != null and params.dataScope != null and params.dataScope != ''">
+                ${params.dataScope}
+            </if>
+        </where>
+    </select>
+
+    <!-- 通用预警详情（researcher 专用）：按 id 查本人相关 -->
+    <select id="selectAlertByIdForResearcher" resultMap="AlertResult">
+        <include refid="selectAlertVo"/>
+        where a.del_flag = '0' and a.alert_id = #{alertId}
+          and (
+              coalesce(p_cn.leader_id, p_pj.leader_id, p_pd.leader_id, p_bs.leader_id) = #{selfUserId}
+              or exists (
+                  select 1 from project_member m
+                   where m.project_id = coalesce(p_cn.project_id, p_pj.project_id, p_pd.project_id, p_bs.project_id)
+                     and m.user_id    = #{selfUserId}
+                     and m.del_flag   = '0'
+              )
+          )
+    </select>
+
+    <!-- D3 幂等 upsert：查同 biz_key 且 status='OPEN' 的现有行（应用层保证至多 1 行，limit 1 兜底） -->
+    <select id="selectOpenByBizKey" parameterType="java.lang.String" resultMap="AlertResult">
+        select alert_id, alert_type, ref_id, ref_type, alert_level, title, content,
+               status, biz_key, round, first_time, last_time, del_flag,
+               create_by, create_time, update_by, update_time, remark
+          from alert
+         where biz_key   = #{bizKey}
+           and status    = 'OPEN'
+           and del_flag  = '0'
+         limit 1
+    </select>
+
+    <!-- D3：查同 biz_key 的历史最大 round（含 RESOLVED 保留行），无则 0 -->
+    <select id="selectMaxRoundByBizKey" parameterType="java.lang.String" resultType="java.lang.Integer">
+        select coalesce(max(round), 0)
+          from alert
+         where biz_key  = #{bizKey}
+           and del_flag = '0'
+    </select>
+
+    <!-- D3：幂等命中后仅更新 last_time（不新增、不重复通知） -->
+    <update id="updateLastTime">
+        update alert
+           set last_time   = #{lastTime},
+               update_by   = #{updateBy},
+               update_time = sysdate
+         where alert_id = #{alertId}
+           and del_flag = '0'
+    </update>
+
+    <!-- D7 消除：status→RESOLVED + remark 记操作人；守卫覆盖 OPEN + 阶段4 遗留 BUDGET 预警
+         （UNREAD/READ/HANDLED，ref_type=NULL）——所有非 RESOLVED 状态均可消除，已消除则 0 行幂等 -->
+    <update id="resolveAlert">
+        update alert
+           set status      = 'RESOLVED',
+               remark      = #{remark},
+               update_by   = #{updateBy},
+               update_time = sysdate
+         where alert_id = #{alertId}
+           and status  in ('OPEN', 'UNREAD', 'READ', 'HANDLED')
+           and del_flag = '0'
+    </update>
+
+    <!-- D5 扫描① 合同节点临近：status='PENDING' 且 plan_date ∈ [today, today+15] -->
+    <select id="selectContractNodeCandidates" resultType="com.ruoyi.biz.domain.vo.AlertScanCandidate">
+        select cn.node_id as refId, 'CONTRACT' as refType,
+               p.project_id as projectId, p.leader_id as leaderId,
+               cn.node_name as nodeName, c.contract_name as contractName, cn.plan_date as planDate,
+               p.project_no as projectNo, p.project_name as projectName
+          from contract_node cn
+          join contract c on cn.contract_id = c.contract_id and c.del_flag = '0'
+          join project p   on c.project_id   = p.project_id   and p.del_flag = '0'
+         where cn.status = 'PENDING'
+           and cn.del_flag = '0'
+           and cn.plan_date between trunc(sysdate) and trunc(sysdate) + 15
+    </select>
+
+    <!-- D5 扫描② 经费超限：budget_balance ≤ 1000 OR (budget_total>0 AND balance/total ≤ 0.05) -->
+    <select id="selectBudgetOverrunCandidates" resultType="com.ruoyi.biz.domain.vo.AlertScanCandidate">
+        select p.project_id as refId, 'PROJECT' as refType,
+               p.project_id as projectId, p.leader_id as leaderId,
+               p.project_no as projectNo, p.project_name as projectName,
+               p.budget_total as budgetTotal, p.budget_balance as budgetBalance
+          from project p
+         where p.del_flag = '0'
+           and (
+               p.budget_balance <![CDATA[ <= ]]> 1000
+               or (p.budget_total > 0 and p.budget_balance / p.budget_total <![CDATA[ <= ]]> 0.05)
+           )
+    </select>
+
+    <!-- D5 扫描③ 资料逾期：plan_submit_date < today 且 (无 approval 或 approval.status='PENDING') -->
+    <select id="selectOverdueDocumentCandidates" resultType="com.ruoyi.biz.domain.vo.AlertScanCandidate">
+        select pd.doc_id as refId, 'DOCUMENT' as refType,
+               pd.project_id as projectId, p.leader_id as leaderId,
+               pd.file_name as fileName, pd.plan_submit_date as planSubmitDate,
+               p.project_no as projectNo, p.project_name as projectName
+          from project_document pd
+          join project p on pd.project_id = p.project_id and p.del_flag = '0'
+         where pd.del_flag = '0'
+           and pd.plan_submit_date <![CDATA[ < ]]> trunc(sysdate)
+           and (
+               not exists (
+                   select 1 from approval a
+                    where a.doc_id = pd.doc_id and a.del_flag = '0'
+               )
+               or exists (
+                   select 1 from approval a
+                    where a.doc_id = pd.doc_id and a.del_flag = '0' and a.status = 'PENDING'
+               )
+           )
     </select>
 </mapper>
