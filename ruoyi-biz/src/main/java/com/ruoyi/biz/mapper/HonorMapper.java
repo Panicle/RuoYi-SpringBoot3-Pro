@@ -48,9 +48,10 @@ public interface HonorMapper extends BaseMapper<Honor> {
     Honor selectHonorById(Honor query);
 
     /**
-     * researcher 详情专用：按 id 查本人相关（无关联/不在本人范围则返回 null，Service 抛"无权访问"）
+     * researcher 详情专用：按 id 查本人相关或本人录入（create_by=当前登录用户名；无关联/不在本人范围/非本人录入则返回 null，Service 抛"无权访问"）
      */
-    Honor selectHonorByIdForResearcher(@Param("honorId") Long honorId, @Param("selfUserId") Long selfUserId);
+    Honor selectHonorByIdForResearcher(@Param("honorId") Long honorId, @Param("selfUserId") Long selfUserId,
+                                       @Param("selfUsername") String selfUsername);
 
     /**
      * 逻辑删除单条荣誉（del_flag='2'；关联 honor_relation 级联软删由 Service 同事务调用 HonorRelationMapper.softDeleteByHonorId）

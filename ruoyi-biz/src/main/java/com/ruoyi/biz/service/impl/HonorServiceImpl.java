@@ -28,14 +28,15 @@ import java.util.Set;
  * 荣誉 Service 实现（荣誉 CRUD + 关联维护，任务卡 Task 2）
  *
  * <p>数据权限照 ProjectDocumentServiceImpl/ContractServiceImpl 双通道：列表 researcher 走"本人相关"专用 SQL
- * （本人作为人员 OR 所在课题 出现在有效关联中），其他角色走 @DataScope 注解；
- * 详情/全部写操作过 scoped {@code selectHonorById} 闸门（researcher 亦须本人相关，抛"无权访问"）。</p>
+ * （本人作为人员 OR 所在课题 出现在有效关联中 OR 本人录入 create_by=当前登录用户名），其他角色走 @DataScope 注解；
+ * 详情/全部写操作过 scoped {@code selectHonorById} 闸门（researcher 须本人相关或本人录入，抛"无权访问"）。</p>
  *
  * <p>D2：ref_type='RESEARCHER' 时 ref_id = sys_user.user_id；RESEARCHER 不走 scoped 闸门（人员与数据范围无强关联）。
- * D4：写操作权限串已挂 science_admin/admin（@PreAuthorize 强校验），Service 仍做存在性/合法性校验。
+ * D4：写操作（add/edit/relation）已放开 researcher（菜单 2062/2063/2066 挂载），remove 仍 admin/science_admin；
+ *     @PreAuthorize 强校验，Service 仍做存在性/合法性校验；researcher 仅能编辑本人录入（create_by 校验）。
  * D5：删荣誉同事务级联软删全部有效 honor_relation；关联查重走应用层（同 honor_id+ref_type+ref_id 有效行存在则拒）。</p>
  *
- * <p>无关联的荣誉仅全所范围角色可见（本人/本室通道查不到是预期语义）。</p>
+ * <p>无关联的荣誉仅全所范围角色可见；researcher 本人录入的无关联荣誉对本人可见（create_by 命中）。</p>
  *
  * @author kys
  * @date 2026-08-15
@@ -70,6 +71,8 @@ public class HonorServiceImpl implements IHonorService {
         if (isResearcher()) {
             Long me = SecurityUtils.getUserId();
             query.getParams().put("selfUserId", me);
+            // 本人录入可见：create_by = 当前登录用户名（RuoYi BaseEntity.createBy 惯例 = SecurityUtils.getUsername()）
+            query.getParams().put("selfUsername", SecurityUtils.getUsername());
             return honorMapper.selectHonorListForResearcher(query);
         }
         return honorMapper.selectHonorList(query);
@@ -83,7 +86,7 @@ public class HonorServiceImpl implements IHonorService {
         // researcher 走"本人相关"按 id 查；其他角色走 @DataScope 通道的 selectHonorById
         if (isResearcher()) {
             Long me = SecurityUtils.getUserId();
-            Honor h = honorMapper.selectHonorByIdForResearcher(honorId, me);
+            Honor h = honorMapper.selectHonorByIdForResearcher(honorId, me, SecurityUtils.getUsername());
             if (h == null) {
                 // 不暴露是否存在信息
                 throw new ServiceException("无权访问");
@@ -129,8 +132,12 @@ public class HonorServiceImpl implements IHonorService {
         if (honor == null || honor.getHonorId() == null) {
             throw new ServiceException("honorId 不能为空");
         }
-        // scoped 闸门（researcher 走本人相关；其他角色走 @DataScope 已校验的 selectHonorById）
-        selectHonorById(honor.getHonorId());
+        // scoped 闸门（researcher 走本人相关/本人录入；其他角色走 @DataScope 已校验的 selectHonorById）
+        Honor db = selectHonorById(honor.getHonorId());
+        // researcher 只能编辑自己录入的荣誉（产品裁决 3，create_by=登录用户名）；admin/science_admin 不校验
+        if (isResearcher() && !StringUtils.equals(db.getCreateBy(), SecurityUtils.getUsername())) {
+            throw new ServiceException("无权修改他人荣誉");
+        }
         honor.setUpdateBy(operName);
         return honorMapper.updateById(honor);
     }

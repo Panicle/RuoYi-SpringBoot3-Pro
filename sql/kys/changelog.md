@@ -859,3 +859,36 @@
 - 阶段9 Task 3：前端（views/biz/alert/{index,notify}.vue + api；复用 monitor.svg/message.svg）
 - 阶段9 Task 4：冒烟（任务卡 §七 清单：扫描触发/幂等去重/消除流转/通知已读确认/字典回显/回归）
 
+---
+
+## V1.0.18 — 阶段7收尾 放开 researcher 荣誉录入权限
+
+**日期**：2026-08-16
+
+**任务卡关联**：fix-honor-perm-brief.md（用户反馈"荣誉管理普通用户不能录入吗？"产品裁决）
+
+**变更内容**：
+
+1. **researcher(105) 补挂写操作菜单 3 项**（V1.0.14 只挂了只读 2060/2061/2065）：
+   - 2062 F 新增（biz:honor:add）
+   - 2063 F 修改（biz:honor:edit）
+   - 2066 F 关联维护（biz:honor:relation）
+2. **删除（2064 biz:honor:remove）不放开**：仍仅 admin/science_admin（产品裁决 1）
+3. 挂载后 researcher 荣誉菜单挂载数由 3 → 6（2060/2061/2065 + 2062/2063/2066），7 角色荣誉挂载总数由 29 → 32 条
+
+**幂等性设计**：
+- 角色菜单挂载走 `INSERT ... SELECT ... WHERE NOT EXISTS`（role_id + menu_id 存在性判定，同 V1.0.6–V1.0.16）
+- **首次执行 X/X 成功；二次重跑 X/X 全绿零副作用**
+
+**DB 复查**（dmPython 直查，全部 PASS）：
+- `sys_role_menu` researcher(105) 荣誉菜单挂载数 = 6（2060/2061/2062/2063/2065/2066，含新增 2062/2063/2066）
+- 删除权限 2064 未挂 researcher（仅 admin/science_admin 挂载）
+
+**依赖**：
+- V1.0.14：菜单 2062/2063/2066
+- V1.0.4：researcher 角色 105
+
+**后续任务**：
+- 后端：HonorMapper.xml / HonorMapper.java / HonorServiceImpl 放开 researcher 写入与本人录入可见（本 fix 同步落地）
+- 前端：无需改（按钮已用 v-hasPermi，权限串放开后自动对 researcher 显示）
+

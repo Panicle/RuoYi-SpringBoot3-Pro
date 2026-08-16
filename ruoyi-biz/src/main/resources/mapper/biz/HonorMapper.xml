@@ -66,7 +66,7 @@
         order by h.honor_id desc
     </select>
 
-    <!-- researcher 列表（本人相关）：本人作为人员 OR 所在课题 出现在有效关联中 -->
+    <!-- researcher 列表（本人相关）：本人作为人员 OR 所在课题 出现在有效关联中 OR 本人录入（create_by=当前登录用户名） -->
     <select id="selectHonorListForResearcher" parameterType="Honor" resultMap="HonorResult">
         <include refid="selectHonorVo"/>
         <where>
@@ -80,6 +80,7 @@
                       and (p.leader_id = #{params.selfUserId}
                            or exists (select 1 from project_member m where m.project_id = p.project_id
                                       and m.user_id = #{params.selfUserId} and m.del_flag='0')))
+              or h.create_by = #{params.selfUsername}
             )
         </where>
         order by h.honor_id desc
@@ -104,7 +105,8 @@
         </where>
     </select>
 
-    <!-- researcher 详情：按 id 查本人相关（无关联/不在本人范围返回 null，Service 抛"无权访问"） -->
+    <!-- researcher 详情：按 id 查本人相关（无关联/不在本人范围返回 null，Service 抛"无权访问"）。
+         含本人录入（create_by=当前登录用户名），否则 researcher 录入的荣誉详情查不到。 -->
     <select id="selectHonorByIdForResearcher" resultMap="HonorResult">
         <include refid="selectHonorVo"/>
         where h.del_flag = '0' and h.honor_id = #{honorId}
@@ -116,6 +118,7 @@
                     and (p.leader_id = #{selfUserId}
                          or exists (select 1 from project_member m where m.project_id = p.project_id
                                     and m.user_id = #{selfUserId} and m.del_flag='0')))
+            or h.create_by = #{selfUsername}
           )
     </select>
 
