@@ -1,8 +1,12 @@
 package com.ruoyi.biz.service;
 
 import com.ruoyi.biz.domain.Approval;
+import com.ruoyi.biz.domain.Contract;
+import com.ruoyi.biz.domain.CooperativeUnit;
+import com.ruoyi.biz.domain.Honor;
 import com.ruoyi.biz.domain.Notification;
 import com.ruoyi.biz.domain.Project;
+import com.ruoyi.biz.domain.ProjectMember;
 import com.ruoyi.biz.domain.RdWorktimeMonthly;
 import com.ruoyi.biz.domain.UserProfile;
 import com.ruoyi.biz.domain.vo.ConfirmCard;
@@ -44,7 +48,11 @@ public class ChatTools {
     private final INotificationService notificationService;
     private final IRdWorktimeService rdWorktimeService;
     private final IUserProfileService userProfileService;
+    private final IContractService contractService;
+    private final IHonorService honorService;
+    private final ICooperativeUnitService cooperativeUnitService;
     private final ChatConfirmService chatConfirmService;
+    private final ChatReportService chatReportService;
 
     // ========================================================
     //  查询工具
@@ -83,11 +91,46 @@ public class ChatTools {
             if (n++ >= MAX_ROWS) {
                 break;
             }
-            sb.append("\n").append(n).append(". ").append(safe(p.getProjectNo())).append(" | ")
+            sb.append("\n").append(n).append(". ID ").append(p.getProjectId())
+              .append(" | ").append(safe(p.getProjectNo())).append(" | ")
               .append(safe(p.getProjectName())).append(" | 组长：").append(safe(p.getLeaderName()))
               .append(" | 预算总额：").append(p.getBudgetTotal() == null ? "-" : p.getBudgetTotal().toPlainString())
               .append(" | 余额：").append(p.getBudgetBalance() == null ? "-" : p.getBudgetBalance().toPlainString())
               .append(" | 状态：").append(safe(p.getStatus()));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 查询课题成员名单（selectMemberList 内含 scoped 闸门，无权课题直接抛异常）
+     */
+    @Tool(description = "按课题ID查询课题成员名单（返回姓名/登录账号/部门/角色），参数 projectId=课题ID。"
+            + "用户只给课题名称或编号时，先用 query_project 查到课题ID再调用本工具。")
+    public String queryProjectMember(
+            @ToolParam(description = "课题ID") Long projectId) {
+        if (projectId == null) {
+            return "请提供课题ID";
+        }
+        List<ProjectMember> members;
+        try {
+            members = projectService.selectMemberList(projectId);
+        } catch (ServiceException e) {
+            return "无权查看该课题或课题不存在";
+        }
+        if (members == null || members.isEmpty()) {
+            return "该课题暂无成员";
+        }
+        StringBuilder sb = new StringBuilder("课题成员 " + members.size() + " 人：");
+        int n = 0;
+        for (ProjectMember m : members) {
+            if (n++ >= MAX_ROWS) {
+                sb.append("\n…（仅展示前 " + MAX_ROWS + " 人）");
+                break;
+            }
+            sb.append("\n").append(n).append(". ").append(safe(m.getNickName()))
+              .append("（").append(safe(m.getUserName())).append("）")
+              .append(" | 部门：").append(safe(m.getDeptName()))
+              .append(" | 角色：").append("HOST".equals(m.getRole()) ? "组长" : "成员");
         }
         return sb.toString();
     }
@@ -233,6 +276,143 @@ public class ChatTools {
               .append(" | 电话：").append(safe(firstNonEmpty(u.getPhonenumber(), u.getOfficePhone())));
         }
         return sb.toString();
+    }
+
+    /**
+     * 查询合同（researcher 本人相关 / 其余全量，Service 内双通道）
+     */
+    @Tool(description = "按合同名称或编号关键词查询合同列表（返回合同编号/名称/关联课题/对方单位/金额/签订日期/到期日期/状态），"
+            + "参数 keyword 可省略（省略查当前用户可见范围内全部合同）。")
+    public String queryContract(
+            @ToolParam(required = false, description = "合同名称或编号关键词，可省略") String keyword) {
+        Contract query = new Contract();
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            query.setContractName(keyword.trim());
+        }
+        List<Contract> list = contractService.selectContractList(query);
+        if ((list == null || list.isEmpty()) && keyword != null && !keyword.trim().isEmpty()) {
+            // 名称没中 → 按编号再试一次
+            Contract byNo = new Contract();
+            byNo.setContractNo(keyword.trim());
+            list = contractService.selectContractList(byNo);
+        }
+        if (list == null || list.isEmpty()) {
+            return keyword == null || keyword.trim().isEmpty() ? "暂无合同" : "未找到合同[" + keyword.trim() + "]";
+        }
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+        StringBuilder sb = new StringBuilder("合同 " + list.size() + " 份（展示前 " + Math.min(list.size(), MAX_ROWS) + " 份）：");
+        int n = 0;
+        for (Contract c : list) {
+            if (n++ >= MAX_ROWS) {
+                break;
+            }
+            sb.append("\n").append(n).append(". ").append(safe(c.getContractNo()))
+              .append(" | ").append(safe(c.getContractName()))
+              .append(" | 课题：").append(safe(c.getProjectName()))
+              .append(" | 对方单位：").append(safe(c.getPartyName() != null ? c.getPartyName() : c.getPartyUnitName()))
+              .append(" | 金额：").append(c.getAmount() == null ? "-" : c.getAmount().toPlainString())
+              .append(" | 签订：").append(c.getSignDate() == null ? "-" : sdf.format(c.getSignDate()))
+              .append(" | 到期：").append(c.getExpireDate() == null ? "-" : sdf.format(c.getExpireDate()))
+              .append(" | 状态：").append(safe(c.getStatus()));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 查询荣誉（researcher 本人相关+本人录入 / 其余全量，Service 内双通道）
+     */
+    @Tool(description = "按荣誉名称关键词查询荣誉列表（返回荣誉名称/类型/级别/授予单位/获奖日期/证书编号），"
+            + "参数 keyword 可省略（省略查当前用户可见范围内全部荣誉）。")
+    public String queryHonor(
+            @ToolParam(required = false, description = "荣誉名称关键词，可省略") String keyword) {
+        Honor query = new Honor();
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            query.setHonorName(keyword.trim());
+        }
+        List<Honor> list = honorService.selectHonorList(query);
+        if (list == null || list.isEmpty()) {
+            return keyword == null || keyword.trim().isEmpty() ? "暂无荣誉记录" : "未找到荣誉[" + keyword.trim() + "]";
+        }
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+        StringBuilder sb = new StringBuilder("荣誉 " + list.size() + " 项（展示前 " + Math.min(list.size(), MAX_ROWS) + " 项）：");
+        int n = 0;
+        for (Honor h : list) {
+            if (n++ >= MAX_ROWS) {
+                break;
+            }
+            sb.append("\n").append(n).append(". ").append(safe(h.getHonorName()))
+              .append(" | 类型：").append(safe(h.getHonorType()))
+              .append(" | 级别：").append(safe(h.getAwardLevel()))
+              .append(" | 授予单位：").append(safe(h.getAwardOrg()))
+              .append(" | 获奖日期：").append(h.getAwardDate() == null ? "-" : sdf.format(h.getAwardDate()))
+              .append(" | 证书编号：").append(safe(h.getCertificateNo()));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 查询合作单位（全所共享主数据，无数据范围隔离）
+     */
+    @Tool(description = "按单位名称关键词查询合作单位列表（返回单位名称/内外部类型/公司或学校/联系人/联系电话/擅长领域），"
+            + "参数 keyword 可省略（省略查全部合作单位）。")
+    public String queryUnit(
+            @ToolParam(required = false, description = "单位名称关键词，可省略") String keyword) {
+        CooperativeUnit query = new CooperativeUnit();
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            query.setUnitName(keyword.trim());
+        }
+        List<CooperativeUnit> list = cooperativeUnitService.selectUnitList(query);
+        if (list == null || list.isEmpty()) {
+            return keyword == null || keyword.trim().isEmpty() ? "暂无合作单位" : "未找到合作单位[" + keyword.trim() + "]";
+        }
+        StringBuilder sb = new StringBuilder("合作单位 " + list.size() + " 家（展示前 " + Math.min(list.size(), MAX_ROWS) + " 家）：");
+        int n = 0;
+        for (CooperativeUnit u : list) {
+            if (n++ >= MAX_ROWS) {
+                break;
+            }
+            sb.append("\n").append(n).append(". ").append(safe(u.getUnitName()))
+              .append(" | 类型：").append(safe(u.getUnitType()))
+              .append(safe(u.getExternalUnitType()).isEmpty() ? "" : "/" + u.getExternalUnitType())
+              .append(" | 联系人：").append(safe(u.getContactPerson()))
+              .append(" | 电话：").append(safe(u.getContactPhone()))
+              .append(" | 擅长领域：").append(safe(u.getExpertise()));
+        }
+        return sb.toString();
+    }
+
+    // ========================================================
+    //  文档生成工具（内容由代码模板保证，LLM 只传参）
+    // ========================================================
+
+    /**
+     * 课题经费执行报告 Excel（预算执行 + 支出明细两个 sheet；数据过 scoped 闸门）
+     */
+    @Tool(description = "生成课题经费执行报告 Excel 文件（含预算科目执行情况与支出明细），参数 projectId=课题ID。"
+            + "生成成功后返回下载路径，请把下载路径原样完整输出给用户，不要改写。")
+    public String generateExpenseReport(
+            @ToolParam(description = "课题ID") Long projectId) {
+        try {
+            String url = chatReportService.generateExpenseExcel(projectId);
+            return "经费执行报告已生成（Excel），下载路径：" + url;
+        } catch (ServiceException e) {
+            return "报告生成失败：" + e.getMessage();
+        }
+    }
+
+    /**
+     * 课题综合档案 Word（基本信息 + 成员名单 + 预算科目；数据过 scoped 闸门）
+     */
+    @Tool(description = "生成课题综合档案 Word 文档（含基本信息/成员名单/预算科目），参数 projectId=课题ID。"
+            + "生成成功后返回下载路径，请把下载路径原样完整输出给用户，不要改写。")
+    public String generateProjectDoc(
+            @ToolParam(description = "课题ID") Long projectId) {
+        try {
+            String url = chatReportService.generateProjectDocx(projectId);
+            return "课题档案已生成（Word），下载路径：" + url;
+        } catch (ServiceException e) {
+            return "档案生成失败：" + e.getMessage();
+        }
     }
 
     // ========================================================
