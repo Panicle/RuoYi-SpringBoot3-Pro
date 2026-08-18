@@ -1,21 +1,30 @@
 package com.ruoyi.biz.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ruoyi.biz.domain.BudgetSplit;
 import com.ruoyi.biz.domain.CooperativeUnit;
 import com.ruoyi.biz.domain.Project;
+import com.ruoyi.biz.domain.ProjectField;
 import com.ruoyi.biz.domain.ProjectMember;
 import com.ruoyi.biz.domain.ProjectUnit;
+import com.ruoyi.biz.domain.UserProfile;
+import com.ruoyi.biz.domain.bo.ExternalMemberBo;
 import com.ruoyi.biz.mapper.BudgetSplitMapper;
 import com.ruoyi.biz.mapper.CooperativeUnitMapper;
 import com.ruoyi.biz.mapper.ExpenseMapper;
+import com.ruoyi.biz.mapper.ProjectFieldMapper;
 import com.ruoyi.biz.mapper.ProjectMapper;
 import com.ruoyi.biz.mapper.ProjectMemberMapper;
 import com.ruoyi.biz.mapper.ProjectUnitMapper;
 import com.ruoyi.biz.service.IProjectService;
+import com.ruoyi.biz.service.IUserProfileService;
+import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.entity.SysRole;
+import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.system.mapper.SysDeptMapper;
 import com.ruoyi.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -32,6 +41,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * 课题 Service 实现
@@ -58,6 +68,10 @@ public class ProjectServiceImpl implements IProjectService {
     /** 成员角色（与字典 member_role 一致） */
     private static final String ROLE_HOST        = "HOST";
     private static final String ROLE_PARTICIPANT = "PARTICIPANT";
+    private static final String ROLE_LIAISON     = "LIAISON";
+
+    /** 外部人员虚拟部门名（V1.0.20 预建，外单位人员账号统一挂此部门禁登录） */
+    private static final String EXTERNAL_DEPT_NAME = "外部人员";
 
     /** 状态机迁移表（相邻单向；archive 走 archive 接口而非 changeStatus） */
     private static final Map<String, Set<String>> STATE_TRANSITIONS = new HashMap<String, Set<String>>() {{
@@ -70,11 +84,14 @@ public class ProjectServiceImpl implements IProjectService {
 
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final ProjectFieldMapper projectFieldMapper;
     private final BudgetSplitMapper budgetSplitMapper;
     private final ExpenseMapper expenseMapper;
     private final ProjectUnitMapper projectUnitMapper;
     private final CooperativeUnitMapper cooperativeUnitMapper;
     private final SysUserMapper sysUserMapper;
+    private final SysDeptMapper sysDeptMapper;
+    private final IUserProfileService userProfileService;
     private final BudgetSupport budgetSupport;
 
     // ========================================================
@@ -128,6 +145,8 @@ public class ProjectServiceImpl implements IProjectService {
         }
         // 预算细分（详情/编辑回显）
         p.setBudgetSplitList(budgetSplitMapper.selectByProjectId(projectId));
+        // 研究领域（多选，V1.0.21）
+        p.setFieldList(selectFieldCodes(projectId));
         return p;
     }
 
@@ -155,6 +174,21 @@ public class ProjectServiceImpl implements IProjectService {
         }
         if (project.getLeaderId() == null) {
             throw new ServiceException("组长不能为空");
+        }
+        // 主持标识（V1.0.20）：默认本单位主持；外单位主持必须给出主持单位（cooperative_unit）
+        if (StringUtils.isEmpty(project.getSelfHosted())) {
+            project.setSelfHosted("1");
+        }
+        if ("0".equals(project.getSelfHosted())) {
+            if (project.getHostUnitId() == null) {
+                throw new ServiceException("外单位主持课题必须选择主持单位");
+            }
+            if (cooperativeUnitMapper.selectById(project.getHostUnitId()) == null) {
+                throw new ServiceException("主持单位不存在");
+            }
+        } else {
+            project.setSelfHosted("1");
+            project.setHostUnitId(null);
         }
         // 1. 校验组长存在
         if (sysUserMapper.selectUserById(project.getLeaderId()) == null) {
@@ -199,11 +233,32 @@ public class ProjectServiceImpl implements IProjectService {
             throw new ServiceException("组长成员行写入冲突");
         }
 
+        // 6.1 外单位主持课题：创建人自动成为联络人（承担系统录入职责；创建人=组长时跳过）
+        if ("0".equals(project.getSelfHosted())) {
+            Long creatorId = currentUserIdOrNull();
+            if (creatorId != null && !creatorId.equals(project.getLeaderId())) {
+                ProjectMember liaison = new ProjectMember();
+                liaison.setProjectId(project.getProjectId());
+                liaison.setUserId(creatorId);
+                liaison.setRole(ROLE_LIAISON);
+                liaison.setDelFlag("0");
+                liaison.setCreateBy(operName);
+                try {
+                    projectMemberMapper.insert(liaison);
+                } catch (DuplicateKeyException e) {
+                    log.info("课题[{}] 创建人已是成员，跳过自动联络人", project.getProjectId());
+                }
+            }
+        }
+
         // 7. 写入预算细分（与主表同事务；projectId 需等主表 insert 回填）
         //    走与编辑同一条增量通道（D1）：新建时库中无行，等价于逐行 INSERT（used=0/balance=budget/version=0），
         //    同时完成科目白名单+去重校验与 §4.4 监管上限校验，超限则整笔回滚。
         //    主表 budget_total/budget_balance 已在第 4 步按同一份清单算好（新建时 balance = budget），无需再写一次
         budgetSupport.applySplits(project.getProjectId(), project.getBudgetSplitList(), true, operName);
+
+        // 8. 研究领域多选（V1.0.21）
+        saveFields(project.getProjectId(), project.getFieldList(), operName);
         return project;
     }
 
@@ -226,10 +281,12 @@ public class ProjectServiceImpl implements IProjectService {
         if (STATUS_ARCHIVED.equals(db.getStatus())) {
             throw new ServiceException("已归档课题不可修改");
         }
-        // 强制以库中原值为准：projectNo / leaderId / status 不允许修改
+        // 强制以库中原值为准：projectNo / leaderId / status / 主持标识 不允许修改
         project.setProjectNo(db.getProjectNo());
         project.setLeaderId(db.getLeaderId());
         project.setStatus(db.getStatus());
+        project.setSelfHosted(db.getSelfHosted());
+        project.setHostUnitId(db.getHostUnitId());
         // 预算细分按 category 增量更新（同事务，决策 D1 / §4.5）：改金额保 split_id，绝不删旧插新，
         // 否则引入 expense.split_id 后历史流水会悬空；本次未传的科目金额置 0 但保留行（有流水的行删了会悬空）。
         // 请求体未带 budgetSplitList（null）则预算两列以库原值为准，忽略客户端传入值（保持 Σ 不变式）；传空列表表示全部置 0。
@@ -247,7 +304,12 @@ public class ProjectServiceImpl implements IProjectService {
             project.setBudgetBalance(db.getBudgetBalance());
         }
         project.setUpdateBy(operName);
-        return projectMapper.updateById(project);
+        int n = projectMapper.updateById(project);
+        // 研究领域多选（V1.0.21）：删旧写新（仅在请求体携带 fieldList 时更新）
+        if (project.getFieldList() != null) {
+            saveFields(project.getProjectId(), project.getFieldList(), operName);
+        }
+        return n;
     }
 
     // ========================================================
@@ -686,5 +748,105 @@ public class ProjectServiceImpl implements IProjectService {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /** 当前登录用户 ID（登录上下文必有；异常时返回 null 走安全分支） */
+    private Long currentUserIdOrNull() {
+        try {
+            return SecurityUtils.getUserId();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 查课题研究领域编码列表（V1.0.21） */
+    private List<String> selectFieldCodes(Long projectId) {
+        List<ProjectField> fields = projectFieldMapper.selectList(
+                new LambdaQueryWrapper<ProjectField>().eq(ProjectField::getProjectId, projectId));
+        List<String> codes = new java.util.ArrayList<>();
+        if (fields != null) {
+            for (ProjectField f : fields) {
+                if (f != null && f.getFieldCode() != null) {
+                    codes.add(f.getFieldCode());
+                }
+            }
+        }
+        return codes;
+    }
+
+    /** 保存课题研究领域（删旧写新；fieldList 为 null/空则清空，V1.0.21） */
+    private void saveFields(Long projectId, List<String> fieldList, String operName) {
+        projectFieldMapper.delete(new LambdaQueryWrapper<ProjectField>().eq(ProjectField::getProjectId, projectId));
+        if (fieldList == null || fieldList.isEmpty()) {
+            return;
+        }
+        for (String code : fieldList) {
+            if (code == null || code.trim().isEmpty()) {
+                continue;
+            }
+            ProjectField f = new ProjectField();
+            f.setProjectId(projectId);
+            f.setFieldCode(code.trim());
+            f.setCreateBy(operName);
+            projectFieldMapper.insert(f);
+        }
+    }
+
+    // ========================================================
+    //  外单位人员录入（V1.0.20：联络人维护外部人员）
+    // ========================================================
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createExternalMember(ExternalMemberBo bo, String operName) {
+        if (bo == null || StringUtils.isEmpty(bo.getNickName())) {
+            throw new ServiceException("外单位人员姓名不能为空");
+        }
+        // 1. 定位"外部人员"虚拟部门
+        SysDept extDept = null;
+        SysDept q = new SysDept();
+        List<SysDept> depts = sysDeptMapper.selectDeptList(q);
+        if (depts != null) {
+            for (SysDept d : depts) {
+                if (EXTERNAL_DEPT_NAME.equals(d.getDeptName()) && "0".equals(d.getDelFlag())) {
+                    extDept = d;
+                    break;
+                }
+            }
+        }
+        if (extDept == null) {
+            throw new ServiceException("外部人员虚拟部门未配置，请先执行 V1.0.20 迁移");
+        }
+        // 2. 生成禁登录账号（EXT + 时间戳 + 随机后缀，不参与登录）
+        String userName = "EXT" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
+        SysUser user = new SysUser();
+        user.setDeptId(extDept.getDeptId());
+        user.setUserName(userName);
+        user.setNickName(bo.getNickName().trim());
+        user.setPhonenumber(bo.getPhonenumber());
+        user.setStatus("1"); // 停用 = 禁止登录
+        user.setDelFlag("0");
+        user.setPassword(SecurityUtils.encryptPassword(UUID.randomUUID().toString()));
+        user.setRemark(bo.getUnitName());
+        user.setCreateBy(operName);
+        sysUserMapper.insertUser(user);
+        Long userId = user.getUserId();
+
+        // 3. 可选建档（职称/学历/学位/专业/研究方向有任一值才建档）
+        if (StringUtils.isNotEmpty(bo.getTitleLevel()) || StringUtils.isNotEmpty(bo.getEduLevel())
+                || StringUtils.isNotEmpty(bo.getDegree()) || StringUtils.isNotEmpty(bo.getMajor())
+                || StringUtils.isNotEmpty(bo.getResearchDirection())) {
+            UserProfile profile = new UserProfile();
+            profile.setUserId(userId);
+            profile.setTitleLevel(bo.getTitleLevel());
+            profile.setEduLevel(bo.getEduLevel());
+            profile.setDegree(bo.getDegree());
+            profile.setMajor(bo.getMajor());
+            profile.setResearchDirection(bo.getResearchDirection());
+            profile.setDelFlag("0");
+            profile.setCreateBy(operName);
+            userProfileService.insertUserProfile(profile);
+        }
+        return userId;
     }
 }

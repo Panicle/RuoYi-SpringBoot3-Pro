@@ -3,6 +3,7 @@ package com.ruoyi.biz.service;
 import com.ruoyi.biz.domain.Project;
 import com.ruoyi.biz.domain.ProjectMember;
 import com.ruoyi.biz.domain.ProjectUnit;
+import com.ruoyi.biz.domain.bo.ExternalMemberBo;
 
 import java.util.List;
 
@@ -95,4 +96,12 @@ public interface IProjectService {
      * 批量删除课题关联单位（每个关联所属课题需通过数据范围；逻辑删除）
      */
     int removeProjectUnits(Long[] ids, String operName);
+
+    /**
+     * 录入外单位人员（V1.0.20：联络人维护外单位课题成员）。
+     * 生成 EXT+时间戳 登录账号、挂"外部人员"虚拟部门、status='1' 禁登录，可选建档。
+     *
+     * @return 新建 userId
+     */
+    Long createExternalMember(ExternalMemberBo bo, String operName);
 }

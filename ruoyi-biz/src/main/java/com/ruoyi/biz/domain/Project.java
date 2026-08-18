@@ -92,6 +92,14 @@ public class Project extends BaseEntity {
     @TableField("dept_id")
     private Long deptId;
 
+    /** 是否本单位主持（1 本单位（科研所）/0 外单位主持，V1.0.20） */
+    @TableField("self_hosted")
+    private String selfHosted;
+
+    /** 主持单位ID（外单位主持时关联 cooperative_unit.unit_id；本单位主持为空） */
+    @TableField("host_unit_id")
+    private Long hostUnitId;
+
     /** 删除标志（0代表存在 2代表删除） */
     @TableLogic(value = "0", delval = "2")
     @TableField("del_flag")
@@ -102,6 +110,10 @@ public class Project extends BaseEntity {
     /** 组长姓名（来自 sys_user.nick_name，列表/详情展示） */
     @TableField(exist = false)
     private String leaderName;
+
+    /** 主持单位名称（来自 cooperative_unit.unit_name，外单位主持展示） */
+    @TableField(exist = false)
+    private String hostUnitName;
 
     /** 所属部门名称（来自 sys_dept.dept_name） */
     @Excel(name = "所属部门")
@@ -121,4 +133,8 @@ public class Project extends BaseEntity {
     /** 预算细分列表（详情/编辑回显；新增/修改请求体携带，预算总额 = Σ 各科目金额） */
     @TableField(exist = false)
     private List<BudgetSplit> budgetSplitList;
+
+    /** 研究领域编码列表（多选，research_direction 字典值；V1.0.21 存 project_field） */
+    @TableField(exist = false)
+    private List<String> fieldList;
 }

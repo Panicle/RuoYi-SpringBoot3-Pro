@@ -3,6 +3,7 @@ package com.ruoyi.biz.controller;
 import com.ruoyi.biz.domain.Project;
 import com.ruoyi.biz.domain.ProjectMember;
 import com.ruoyi.biz.domain.ProjectUnit;
+import com.ruoyi.biz.domain.bo.ExternalMemberBo;
 import com.ruoyi.biz.service.IProjectService;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.annotation.RepeatSubmit;
@@ -199,6 +200,19 @@ public class ProjectController extends BaseController {
     @RepeatSubmit(interval = 2000)
     public AjaxResult removeMember(@PathVariable Long[] memberIds) {
         return toAjax(projectService.removeMembers(memberIds, getUsername()));
+    }
+
+    /**
+     * 录入外单位人员（V1.0.20：联络人维护外单位课题成员）
+     * 生成 EXT+时间戳 登录账号、挂"外部人员"部门、status='1' 禁登录；返回 userId 供 addMember 关联。
+     */
+    @PreAuthorize("@ss.hasPermi('biz:project:member')")
+    @Log(title = "课题成员", businessType = BusinessType.INSERT)
+    @PostMapping("/external-member")
+    @RepeatSubmit(interval = 2000)
+    public AjaxResult addExternalMember(@RequestBody ExternalMemberBo bo) {
+        Long userId = projectService.createExternalMember(bo, getUsername());
+        return success(userId);
     }
 
     /**
