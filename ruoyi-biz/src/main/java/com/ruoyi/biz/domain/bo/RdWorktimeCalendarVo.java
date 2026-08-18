@@ -24,6 +24,9 @@ public class RdWorktimeCalendarVo {
     /** 当月合计（仅当前 project+researcher 范围） */
     private java.math.BigDecimal monthTotal;
 
+    /** 当月休息日（yyyy-MM-dd；周末+法定节假日，剔除调休上班日。前端置灰禁输，V1.0.19） */
+    private List<String> restDays;
+
     /**
      * 单日条目
      */

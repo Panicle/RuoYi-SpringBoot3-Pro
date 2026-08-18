@@ -1,5 +1,7 @@
 package com.ruoyi.biz.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.ruoyi.biz.domain.BizHoliday;
 import com.ruoyi.biz.domain.Project;
 import com.ruoyi.biz.domain.ProjectMember;
 import com.ruoyi.biz.domain.RdWorktimeDaily;
@@ -7,6 +9,7 @@ import com.ruoyi.biz.domain.RdWorktimeMonthly;
 import com.ruoyi.biz.domain.bo.RdWorktimeCalendarVo;
 import com.ruoyi.biz.domain.bo.RdWorktimeCopyVo;
 import com.ruoyi.biz.domain.bo.RdWorktimeSaveBo;
+import com.ruoyi.biz.mapper.BizHolidayMapper;
 import com.ruoyi.biz.mapper.ProjectMemberMapper;
 import com.ruoyi.biz.mapper.ProjectMapper;
 import com.ruoyi.biz.mapper.RdWorktimeDailyMapper;
@@ -30,8 +33,10 @@ import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 研发加计扣除 — 工时 Service 实现（任务卡 Task 2 端点 7-10）
@@ -68,6 +73,7 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
     private final ProjectMemberMapper projectMemberMapper;
     private final SysUserMapper sysUserMapper;
     private final IProjectService projectService;
+    private final BizHolidayMapper bizHolidayMapper;
 
     // ========================================================
     //  日历（端点 7）
@@ -134,6 +140,7 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
         vo.setMonth(month);
         vo.setDays(entries);
         vo.setMonthTotal(scale(monthTotal));
+        vo.setRestDays(new ArrayList<>(restDaysOf(month)));
         return vo;
     }
 
@@ -183,6 +190,7 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
 
         // 3. 逐日校验 + upsert
         int upsertCount = 0;
+        Set<String> restDays = restDaysOf(month);
         if (body.getDays() != null) {
             for (RdWorktimeSaveBo.DayHours dh : body.getDays()) {
                 if (dh == null) {
@@ -209,6 +217,10 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
                 }
                 if (hours.compareTo(DAILY_MAX_HOURS) > 0) {
                     throw new ServiceException("单日单课题工时不能超过 24 小时：" + dh.getWorkDate());
+                }
+                // 周末/法定节假日禁止填报（V1.0.19；置 0 软删除不受限，存量可清理）
+                if (restDays.contains(fmtDate(workDate))) {
+                    throw new ServiceException("节假日/周末不可填报工时：" + dh.getWorkDate());
                 }
                 // 跨课题同日合计 ≤ 24（含本次值）：先拉 (researcher, date) 全部有效行
                 List<RdWorktimeDaily> sameDay = rdWorktimeDailyMapper.selectByResearcherAndDate(researcherId, workDate);
@@ -301,6 +313,7 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
         cal.set(targetYear, targetMonth - 1, 1);  // targetMonth-1 = 当月首日
         int targetMaxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH);
 
+        Set<String> restDays = restDaysOf(month);
         int copied = 0, skipped = 0;
         for (RdWorktimeDaily src : prevDays) {
             Calendar srcCal = Calendar.getInstance();
@@ -314,6 +327,11 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
             targetCal.set(targetYear, targetMonth - 1, day, 0, 0, 0);
             targetCal.set(Calendar.MILLISECOND, 0);
             Date targetDate = targetCal.getTime();
+            // 目标日为周末/法定节假日 → 跳过（V1.0.19）
+            if (restDays.contains(fmtDate(targetDate))) {
+                skipped++;
+                continue;
+            }
             // 跨课题同日合计校验（含复制值）— 复用 save 同口径
             List<RdWorktimeDaily> sameDay = rdWorktimeDailyMapper.selectByResearcherAndDate(researcherId, targetDate);
             BigDecimal total = BigDecimal.ZERO;
@@ -447,6 +465,50 @@ public class RdWorktimeServiceImpl implements IRdWorktimeService {
 
     /** 月份格式校验：YYYY-MM */
     private static final java.util.regex.Pattern MONTH_PATTERN = java.util.regex.Pattern.compile("^\\d{4}-(0[1-9]|1[0-2])$");
+
+    /**
+     * 当月休息日集合（yyyy-MM-dd，V1.0.19）：周六/日默认休息；
+     * biz_holiday 覆盖 — HOLIDAY 行把工作日置休（法定假日），WORKDAY 行把周末置班（调休补班）。
+     */
+    private Set<String> restDaysOf(String month) {
+        int year = Integer.parseInt(month.substring(0, 4));
+        int mon  = Integer.parseInt(month.substring(5, 7));
+        Calendar cal = Calendar.getInstance();
+        cal.clear();
+        cal.set(year, mon - 1, 1);
+        int lastDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH);
+
+        Set<String> rest = new LinkedHashSet<>();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        for (int day = 1; day <= lastDay; day++) {
+            cal.set(Calendar.DAY_OF_MONTH, day);
+            int dow = cal.get(Calendar.DAY_OF_WEEK);
+            if (dow == Calendar.SATURDAY || dow == Calendar.SUNDAY) {
+                rest.add(sdf.format(cal.getTime()));
+            }
+        }
+        // biz_holiday 当月覆盖行
+        cal.set(Calendar.DAY_OF_MONTH, 1);
+        Date monthStart = cal.getTime();
+        cal.set(Calendar.DAY_OF_MONTH, lastDay);
+        Date monthEnd = cal.getTime();
+        List<BizHoliday> overrides = bizHolidayMapper.selectList(
+                new LambdaQueryWrapper<BizHoliday>()
+                        .ge(BizHoliday::getHolidayDate, monthStart)
+                        .le(BizHoliday::getHolidayDate, monthEnd));
+        for (BizHoliday h : overrides) {
+            if (h == null || h.getHolidayDate() == null) {
+                continue;
+            }
+            String d = sdf.format(h.getHolidayDate());
+            if (BizHoliday.TYPE_HOLIDAY.equals(h.getHolidayType())) {
+                rest.add(d);
+            } else if (BizHoliday.TYPE_WORKDAY.equals(h.getHolidayType())) {
+                rest.remove(d);
+            }
+        }
+        return rest;
+    }
 
     /** BigDecimal 2 位 HALF_UP */
     private static BigDecimal scale(BigDecimal v) {
