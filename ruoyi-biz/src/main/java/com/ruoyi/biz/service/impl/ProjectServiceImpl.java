@@ -157,6 +157,8 @@ public class ProjectServiceImpl implements IProjectService {
         p.setFieldList(selectFieldCodes(projectId));
         // 按单位预算（V1.0.23，主持+参与单位各一套 10 科目）
         p.setUnitBudgetList(selectUnitBudgets(projectId));
+        // 参与单位回填（V1.0.23，前端依赖 unitList 做编辑回显）
+        p.setUnitList(projectUnitMapper.selectProjectUnitList(projectId));
         return p;
     }
 
