@@ -49,6 +49,16 @@ public class UserProfileController extends BaseController {
     }
 
     /**
+     * 可选人员选项（课题组长/成员选择器用）：全所 sys_user 列表，无数据范围过滤。
+     * researcher 需选择组长/成员，此处返回全所人员（不做 @DataScope 过滤）。
+     */
+    @PreAuthorize("@ss.hasPermi('biz:userProfile:list')")
+    @GetMapping("/options")
+    public AjaxResult options() {
+        return success(userProfileService.selectUserOptions());
+    }
+
+    /**
      * 获取科研人员档案详细信息
      */
     @PreAuthorize("@ss.hasPermi('biz:userProfile:query')")

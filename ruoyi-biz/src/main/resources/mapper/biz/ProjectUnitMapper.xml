@@ -6,6 +6,7 @@
         <id     property="id"               column="id"                 />
         <result property="projectId"        column="project_id"         />
         <result property="unitId"           column="unit_id"            />
+        <result property="deptId"           column="dept_id"            />
         <result property="cooperationType"  column="cooperation_type"   />
         <result property="delFlag"          column="del_flag"           />
         <result property="createBy"         column="create_by"          />
@@ -17,9 +18,10 @@
         <result property="externalUnitType" column="external_unit_type" />
     </resultMap>
 
-    <!-- 课题关联单位列表（JOIN cooperative_unit 返回 unitName/externalUnitType；del_flag='0'） -->
+    <!-- 课题关联单位列表（V1.0.23：dept_id 一并返回；参与/主持单位 unit_id=dept_id，
+         其名称展示走 sys_dept（前端/后续任务处理），协作单位 JOIN cooperative_unit 取 unitName；del_flag='0'） -->
     <select id="selectProjectUnitList" parameterType="Long" resultMap="ProjectUnitResult">
-        select pu.id, pu.project_id, pu.unit_id, pu.cooperation_type, pu.del_flag,
+        select pu.id, pu.project_id, pu.unit_id, pu.dept_id, pu.cooperation_type, pu.del_flag,
                pu.create_by, pu.create_time, pu.update_by, pu.update_time, pu.remark,
                cu.unit_name, cu.external_unit_type
         from project_unit pu

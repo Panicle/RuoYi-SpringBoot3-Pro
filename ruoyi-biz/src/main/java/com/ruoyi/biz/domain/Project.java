@@ -111,7 +111,7 @@ public class Project extends BaseEntity {
     @TableField(exist = false)
     private String leaderName;
 
-    /** 主持单位名称（来自 cooperative_unit.unit_name，外单位主持展示） */
+    /** 主持单位名称（来自 sys_dept.dept_name，集团二级公司，V1.0.23 起不再关联 cooperative_unit） */
     @TableField(exist = false)
     private String hostUnitName;
 
@@ -137,4 +137,8 @@ public class Project extends BaseEntity {
     /** 研究领域编码列表（多选，research_direction 字典值；V1.0.21 存 project_field） */
     @TableField(exist = false)
     private List<String> fieldList;
+
+    /** 按单位预算列表（V1.0.23 存 project_unit_budget；主持+参与单位各一套 10 科目，聚合后写 budget_split） */
+    @TableField(exist = false)
+    private List<ProjectUnitBudget> unitBudgetList;
 }

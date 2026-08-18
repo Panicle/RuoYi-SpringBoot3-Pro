@@ -269,6 +269,7 @@ public class ProjectController extends BaseController {
         Object pidObj = body.get("projectId");
         Object unitsObj = body.get("unitIds");
         Object ctypeObj = body.get("cooperationType");
+        Object amountObj = body.get("allocatedAmount");
         if (pidObj == null || !(unitsObj instanceof List)) {
             return error("参数不完整");
         }
@@ -281,7 +282,8 @@ public class ProjectController extends BaseController {
             unitIds.add((o instanceof Number) ? ((Number) o).longValue() : Long.parseLong(o.toString()));
         }
         String cooperationType = ctypeObj == null ? null : ctypeObj.toString();
-        int inserted = projectService.addProjectUnits(projectId, unitIds, cooperationType, getUsername());
+        java.math.BigDecimal allocatedAmount = amountObj == null ? null : new java.math.BigDecimal(amountObj.toString());
+        int inserted = projectService.addProjectUnits(projectId, unitIds, cooperationType, allocatedAmount, getUsername());
         int skip = unitIds.size() - inserted;
         String msg = "成功关联" + inserted + "个" + (skip > 0 ? "，跳过已关联" + skip + "个" : "");
         return success(msg);

@@ -7,6 +7,7 @@ import com.ruoyi.biz.domain.Project;
 import com.ruoyi.biz.domain.ProjectField;
 import com.ruoyi.biz.domain.ProjectMember;
 import com.ruoyi.biz.domain.ProjectUnit;
+import com.ruoyi.biz.domain.ProjectUnitBudget;
 import com.ruoyi.biz.domain.UserProfile;
 import com.ruoyi.biz.domain.bo.ExternalMemberBo;
 import com.ruoyi.biz.mapper.BudgetSplitMapper;
@@ -15,6 +16,7 @@ import com.ruoyi.biz.mapper.ExpenseMapper;
 import com.ruoyi.biz.mapper.ProjectFieldMapper;
 import com.ruoyi.biz.mapper.ProjectMapper;
 import com.ruoyi.biz.mapper.ProjectMemberMapper;
+import com.ruoyi.biz.mapper.ProjectUnitBudgetMapper;
 import com.ruoyi.biz.mapper.ProjectUnitMapper;
 import com.ruoyi.biz.service.IProjectService;
 import com.ruoyi.biz.service.IUserProfileService;
@@ -26,6 +28,7 @@ import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.mapper.SysDeptMapper;
 import com.ruoyi.system.mapper.SysUserMapper;
+import com.ruoyi.system.service.ISysDeptService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,6 +73,9 @@ public class ProjectServiceImpl implements IProjectService {
     private static final String ROLE_PARTICIPANT = "PARTICIPANT";
     private static final String ROLE_LIAISON     = "LIAISON";
 
+    /** 关联单位合作类型（字典 cooperation_type） */
+    private static final String ROLE_COLLABORATE = "COLLABORATE";
+
     /** 外部人员虚拟部门名（V1.0.20 预建，外单位人员账号统一挂此部门禁登录） */
     private static final String EXTERNAL_DEPT_NAME = "外部人员";
 
@@ -86,11 +92,13 @@ public class ProjectServiceImpl implements IProjectService {
     private final ProjectMemberMapper projectMemberMapper;
     private final ProjectFieldMapper projectFieldMapper;
     private final BudgetSplitMapper budgetSplitMapper;
+    private final ProjectUnitBudgetMapper projectUnitBudgetMapper;
     private final ExpenseMapper expenseMapper;
     private final ProjectUnitMapper projectUnitMapper;
     private final CooperativeUnitMapper cooperativeUnitMapper;
     private final SysUserMapper sysUserMapper;
     private final SysDeptMapper sysDeptMapper;
+    private final ISysDeptService sysDeptService;
     private final IUserProfileService userProfileService;
     private final BudgetSupport budgetSupport;
 
@@ -147,6 +155,8 @@ public class ProjectServiceImpl implements IProjectService {
         p.setBudgetSplitList(budgetSplitMapper.selectByProjectId(projectId));
         // 研究领域（多选，V1.0.21）
         p.setFieldList(selectFieldCodes(projectId));
+        // 按单位预算（V1.0.23，主持+参与单位各一套 10 科目）
+        p.setUnitBudgetList(selectUnitBudgets(projectId));
         return p;
     }
 
@@ -175,7 +185,7 @@ public class ProjectServiceImpl implements IProjectService {
         if (project.getLeaderId() == null) {
             throw new ServiceException("组长不能为空");
         }
-        // 主持标识（V1.0.20）：默认本单位主持；外单位主持必须给出主持单位（cooperative_unit）
+        // 主持标识（V1.0.23）：默认本单位主持；外单位主持 = 集团二级公司（sys_dept，不再选 cooperative_unit）
         if (StringUtils.isEmpty(project.getSelfHosted())) {
             project.setSelfHosted("1");
         }
@@ -183,12 +193,22 @@ public class ProjectServiceImpl implements IProjectService {
             if (project.getHostUnitId() == null) {
                 throw new ServiceException("外单位主持课题必须选择主持单位");
             }
-            if (cooperativeUnitMapper.selectById(project.getHostUnitId()) == null) {
+            SysDept hostDept = sysDeptService.selectDeptById(project.getHostUnitId());
+            if (hostDept == null || !"0".equals(hostDept.getDelFlag())) {
                 throw new ServiceException("主持单位不存在");
+            }
+            Long groupRootId = findGroupRootDeptId();
+            if (groupRootId == null || hostDept.getParentId() == null
+                    || hostDept.getParentId().longValue() != groupRootId.longValue()) {
+                throw new ServiceException("外单位主持课题必须选择集团二级公司作为主持单位");
             }
         } else {
             project.setSelfHosted("1");
-            project.setHostUnitId(null);
+            // 本单位主持：主持单位 = 当前用户所属二级公司 dept_id（沿 parent_id 链向上）；
+            // 用户已在 root 或无明确二级公司时不置（保持 null）
+            if (project.getHostUnitId() == null) {
+                project.setHostUnitId(resolveSecondLevelDeptId(currentUserDeptId()));
+            }
         }
         // 1. 校验组长存在
         if (sysUserMapper.selectUserById(project.getLeaderId()) == null) {
@@ -206,8 +226,9 @@ public class ProjectServiceImpl implements IProjectService {
         if (projectMapper.selectByProjectNo(project.getProjectNo()) != null) {
             throw new ServiceException("课题编号已存在");
         }
-        // 4. 预算总额 = Σ 预算细分（金额 ≥ 0 校验；null 视为 0）
-        BigDecimal budgetTotal = normalizeBudgetSplits(project.getBudgetSplitList());
+        // 4. 按单位预算聚合 → 项目级预算细分（每科目 = Σ 各单位该科目金额），预算总额 = Σ 各科目
+        List<BudgetSplit> aggregated = aggregateUnitBudgets(project.getUnitBudgetList());
+        BigDecimal budgetTotal = normalizeBudgetSplits(aggregated);
         project.setBudgetTotal(budgetTotal);
         if (project.getBudgetBalance() == null) {
             project.setBudgetBalance(budgetTotal);
@@ -255,10 +276,12 @@ public class ProjectServiceImpl implements IProjectService {
         //    走与编辑同一条增量通道（D1）：新建时库中无行，等价于逐行 INSERT（used=0/balance=budget/version=0），
         //    同时完成科目白名单+去重校验与 §4.4 监管上限校验，超限则整笔回滚。
         //    主表 budget_total/budget_balance 已在第 4 步按同一份清单算好（新建时 balance = budget），无需再写一次
-        budgetSupport.applySplits(project.getProjectId(), project.getBudgetSplitList(), true, operName);
+        budgetSupport.applySplits(project.getProjectId(), aggregated, true, operName);
 
         // 8. 研究领域多选（V1.0.21）
         saveFields(project.getProjectId(), project.getFieldList(), operName);
+        // 9. 按单位预算（V1.0.23）
+        saveUnitBudgets(project.getProjectId(), project.getUnitBudgetList(), operName);
         return project;
     }
 
@@ -287,17 +310,20 @@ public class ProjectServiceImpl implements IProjectService {
         project.setStatus(db.getStatus());
         project.setSelfHosted(db.getSelfHosted());
         project.setHostUnitId(db.getHostUnitId());
-        // 预算细分按 category 增量更新（同事务，决策 D1 / §4.5）：改金额保 split_id，绝不删旧插新，
+        // 按单位预算聚合 → 项目级预算细分（决策 D1 / §4.5）：改金额保 split_id，绝不删旧插新，
         // 否则引入 expense.split_id 后历史流水会悬空；本次未传的科目金额置 0 但保留行（有流水的行删了会悬空）。
-        // 请求体未带 budgetSplitList（null）则预算两列以库原值为准，忽略客户端传入值（保持 Σ 不变式）；传空列表表示全部置 0。
-        if (project.getBudgetSplitList() != null) {
-            normalizeBudgetSplits(project.getBudgetSplitList());
+        // 请求体未带 unitBudgetList（null）则预算两列以库原值为准，忽略客户端传入值（保持 Σ 不变式）；传空列表表示全部置 0。
+        if (project.getUnitBudgetList() != null) {
+            List<BudgetSplit> aggregated = aggregateUnitBudgets(project.getUnitBudgetList());
+            normalizeBudgetSplits(aggregated);
             // 全量终态语义：库中存在但本次未传的科目金额置 0（zeroMissing=true）
             BudgetSupport.Totals totals = budgetSupport.applySplits(
-                    project.getProjectId(), project.getBudgetSplitList(), true, operName);
+                    project.getProjectId(), aggregated, true, operName);
             // D3：两列均由 budget_split 派生，不接受前端直传
             project.setBudgetTotal(totals.getBudgetTotal());
             project.setBudgetBalance(totals.getBalanceTotal());
+            // 按单位预算删旧写新（V1.0.23，仅请求体携带时更新）
+            saveUnitBudgets(project.getProjectId(), project.getUnitBudgetList(), operName);
         } else {
             // 此分支不重跑监管上限校验（现状维持语义：用户未动预算）
             project.setBudgetTotal(db.getBudgetTotal());
@@ -604,18 +630,27 @@ public class ProjectServiceImpl implements IProjectService {
         if (STATUS_ARCHIVED.equals(p.getStatus())) {
             throw new ServiceException("已归档课题不可新增关联单位");
         }
-        // 单位存在性校验（有效行）
-        CooperativeUnit unit = cooperativeUnitMapper.selectUnitById(projectUnit.getUnitId());
-        if (unit == null || !"0".equals(unit.getDelFlag())) {
-            throw new ServiceException("单位不存在或已删除");
+        // 合作类型默认参与（先定类型再分支存在性校验）
+        if (StringUtils.isEmpty(projectUnit.getCooperationType())) {
+            projectUnit.setCooperationType(ROLE_PARTICIPANT);  // 复用成员默认角色 PARTICPANT 语义，字典 cooperation_type 默认参与
+        }
+        // 双来源（V1.0.23）：协作单位走 cooperative_unit；参与/主持单位走集团二级公司 sys_dept
+        if (ROLE_COLLABORATE.equalsIgnoreCase(projectUnit.getCooperationType())) {
+            CooperativeUnit unit = cooperativeUnitMapper.selectUnitById(projectUnit.getUnitId());
+            if (unit == null || !"0".equals(unit.getDelFlag())) {
+                throw new ServiceException("单位不存在或已删除");
+            }
+        } else {
+            SysDept dept = sysDeptService.selectDeptById(projectUnit.getUnitId());
+            if (dept == null || !"0".equals(dept.getDelFlag())) {
+                throw new ServiceException("二级公司不存在或已删除");
+            }
+            projectUnit.setDeptId(projectUnit.getUnitId());
         }
         // 同 project+unit 重复关联友好报错
         ProjectUnit existing = projectUnitMapper.selectByProjectAndUnit(projectUnit.getProjectId(), projectUnit.getUnitId());
         if (existing != null) {
             throw new ServiceException("该单位已关联此课题");
-        }
-        if (StringUtils.isEmpty(projectUnit.getCooperationType())) {
-            projectUnit.setCooperationType(ROLE_PARTICIPANT);  // 复用成员默认角色 PARTICPANT 语义，字典 cooperation_type 默认参与
         }
         projectUnit.setDelFlag("0");  // 三层保险之一：Service 显式置
         projectUnit.setCreateBy(operName);
@@ -624,7 +659,7 @@ public class ProjectServiceImpl implements IProjectService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public int addProjectUnits(Long projectId, List<Long> unitIds, String cooperationType, String operName) {
+    public int addProjectUnits(Long projectId, List<Long> unitIds, String cooperationType, java.math.BigDecimal allocatedAmount, String operName) {
         if (projectId == null || unitIds == null || unitIds.isEmpty()) {
             throw new ServiceException("请选择合作单位");
         }
@@ -639,15 +674,24 @@ public class ProjectServiceImpl implements IProjectService {
         }
         // cooperationType 为空默认 PARTICIPANT（与单条端点一致）
         String cType = StringUtils.isEmpty(cooperationType) ? ROLE_PARTICIPANT : cooperationType;
+        boolean isCollaborate = ROLE_COLLABORATE.equalsIgnoreCase(cType);
         int inserted = 0;
         for (Long unitId : unitIds) {
             if (unitId == null) {
                 throw new ServiceException("unitId 不能为空");
             }
-            // 单位存在性校验（有效行）；任一不存在则整体回滚
-            CooperativeUnit unit = cooperativeUnitMapper.selectUnitById(unitId);
-            if (unit == null || !"0".equals(unit.getDelFlag())) {
-                throw new ServiceException("单位[" + unitId + "]不存在或已删除");
+            // 双来源存在性校验（有效行）；任一不存在则整体回滚
+            if (isCollaborate) {
+                CooperativeUnit unit = cooperativeUnitMapper.selectUnitById(unitId);
+                if (unit == null || !"0".equals(unit.getDelFlag())) {
+                    throw new ServiceException("单位[" + unitId + "]不存在或已删除");
+                }
+            } else {
+                // 参与/主持单位：unit_id 存集团二级公司 dept_id，校验走 sys_dept
+                SysDept dept = sysDeptService.selectDeptById(unitId);
+                if (dept == null || !"0".equals(dept.getDelFlag())) {
+                    throw new ServiceException("二级公司[" + unitId + "]不存在或已删除");
+                }
             }
             // 已关联跳过不报错
             ProjectUnit existing = projectUnitMapper.selectByProjectAndUnit(projectId, unitId);
@@ -657,7 +701,11 @@ public class ProjectServiceImpl implements IProjectService {
             ProjectUnit pu = new ProjectUnit();
             pu.setProjectId(projectId);
             pu.setUnitId(unitId);
+            if (!isCollaborate) {
+                pu.setDeptId(unitId);
+            }
             pu.setCooperationType(cType);
+            pu.setAllocatedAmount(allocatedAmount);
             pu.setDelFlag("0");
             pu.setCreateBy(operName);
             projectUnitMapper.insert(pu);
@@ -790,6 +838,111 @@ public class ProjectServiceImpl implements IProjectService {
             f.setCreateBy(operName);
             projectFieldMapper.insert(f);
         }
+    }
+
+    /**
+     * 按单位预算聚合 → 项目级预算细分（每科目 = Σ 各单位该科目金额；单位预算为零科目的单位行不产生细分）。
+     * 记账事实来源仍是 budget_split（项目级），本方法只是把前端「按单位」录入转成「项目级」清单。
+     */
+    private List<BudgetSplit> aggregateUnitBudgets(List<ProjectUnitBudget> unitList) {
+        Map<String, BigDecimal> m = new HashMap<>();
+        if (unitList != null) {
+            for (ProjectUnitBudget u : unitList) {
+                if (u != null && u.getCategory() != null) {
+                    m.merge(u.getCategory(), nz(u.getBudgetAmount()), BigDecimal::add);
+                }
+            }
+        }
+        List<BudgetSplit> out = new java.util.ArrayList<>();
+        m.forEach((c, amt) -> {
+            BudgetSplit s = new BudgetSplit();
+            s.setCategory(c);
+            s.setBudgetAmount(BudgetSupport.scale(amt));
+            out.add(s);
+        });
+        return out;
+    }
+
+    /** 查课题按单位预算列表（V1.0.23） */
+    private List<ProjectUnitBudget> selectUnitBudgets(Long projectId) {
+        return projectUnitBudgetMapper.selectByProjectId(projectId);
+    }
+
+    /** 保存课题按单位预算（物理删旧 + 重插；category/deptId 为空过滤，V1.0.23） */
+    private void saveUnitBudgets(Long projectId, List<ProjectUnitBudget> unitBudgetList, String operName) {
+        projectUnitBudgetMapper.deleteByProjectId(projectId);
+        if (unitBudgetList == null || unitBudgetList.isEmpty()) {
+            return;
+        }
+        Set<String> seen = new HashSet<>();
+        for (ProjectUnitBudget u : unitBudgetList) {
+            if (u == null || u.getDeptId() == null || u.getCategory() == null || u.getCategory().trim().isEmpty()) {
+                continue;
+            }
+            String key = u.getDeptId() + ":" + u.getCategory();
+            if (!seen.add(key)) {
+                continue;  // 同一单位同一科目重复行跳过（唯一索引 idx_pub_pdc 兜底）
+            }
+            u.setProjectId(projectId);
+            u.setBudgetAmount(BudgetSupport.scale(nz(u.getBudgetAmount())));
+            u.setDelFlag("0");
+            u.setCreateBy(operName);
+            projectUnitBudgetMapper.insert(u);
+        }
+    }
+
+    /** 集团 root（parent_id=0 的顶层节点，总公司） */
+    private Long findGroupRootDeptId() {
+        List<SysDept> depts = sysDeptMapper.selectDeptList(new SysDept());
+        if (depts != null) {
+            for (SysDept d : depts) {
+                if (d != null && d.getParentId() != null && d.getParentId().longValue() == 0L) {
+                    return d.getDeptId();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 沿 sys_dept.parent_id 链向上找「集团二级公司」：父节点 = 集团 root 的节点。
+     * 链断裂 / 已在 root / 不可达时返回 null。
+     */
+    private Long resolveSecondLevelDeptId(Long deptId) {
+        if (deptId == null) {
+            return null;
+        }
+        Long rootId = findGroupRootDeptId();
+        if (rootId == null) {
+            return null;
+        }
+        Long current = deptId;
+        Set<Long> visited = new HashSet<>();
+        while (current != null && visited.add(current)) {
+            SysDept d = sysDeptService.selectDeptById(current);
+            if (d == null) {
+                return null;
+            }
+            if (d.getParentId() != null && d.getParentId().longValue() == rootId.longValue()) {
+                return d.getDeptId();
+            }
+            current = d.getParentId();
+        }
+        return null;
+    }
+
+    /** 当前登录用户所属部门 ID（异常返回 null 走安全分支） */
+    private Long currentUserDeptId() {
+        try {
+            SysUser u = SecurityUtils.getLoginUser().getUser();
+            return u == null ? null : u.getDeptId();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static BigDecimal nz(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     // ========================================================

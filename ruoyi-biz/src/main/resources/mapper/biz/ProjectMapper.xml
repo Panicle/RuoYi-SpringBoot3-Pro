@@ -38,12 +38,12 @@
                p.self_hosted, p.host_unit_id,
                ul.nick_name as leader_name,
                d.dept_name,
-               hu.unit_name as host_unit_name
+               hu.dept_name as host_unit_name
         from project p
         left join sys_user  u  on p.leader_id = u.user_id
         left join sys_user  ul on p.leader_id = ul.user_id
         left join sys_dept  d  on p.dept_id   = d.dept_id
-        left join cooperative_unit hu on p.host_unit_id = hu.unit_id
+        left join sys_dept  hu on p.host_unit_id = hu.dept_id
     </sql>
 
     <!-- 列表：走 @DataScope 通道，researcher 不调用此方法 -->

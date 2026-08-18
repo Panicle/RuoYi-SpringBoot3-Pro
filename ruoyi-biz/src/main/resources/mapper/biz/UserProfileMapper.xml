@@ -84,6 +84,7 @@
             <if test="nickName != null and nickName != ''">
                 and (u.nick_name like concat('%', #{nickName}, '%') or u.user_name like concat('%', #{nickName}, '%'))
             </if>
+            <if test="deptId != null"> and u.dept_id = #{deptId} </if>
             <!-- 数据范围过滤（Service 层 @DataScope 注入） -->
             ${params.dataScope}
         </where>

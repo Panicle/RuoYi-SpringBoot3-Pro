@@ -31,6 +31,12 @@ public interface IUserProfileService extends IService<UserProfile> {
     public List<UserProfile> selectChatUserList(UserProfile query);
 
     /**
+     * 可选人员选项（组长/成员选择器用）：全所 sys_user 列表，无数据范围过滤。
+     * 与 selectChatUserList 同源（sys_user 主表 + 档案 LEFT JOIN），但不走 @DataScope。
+     */
+    public List<UserProfile> selectUserOptions();
+
+    /**
      * 查询单条科研人员档案（含关联信息）
      *
      * @param profileId 档案ID
