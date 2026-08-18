@@ -40,4 +40,14 @@ public interface ProjectUnitMapper extends BaseMapper<ProjectUnit> {
      * 批量逻辑删除（updateBy / del_flag='2'）
      */
     int softDeleteByIds(@Param("ids") Long[] ids, @Param("updateBy") String updateBy);
+
+    /**
+     * 物理删除课题全部关联单位（课题保存全量替换用，不走 @TableLogic；del_flag 无唯一索引约束）
+     */
+    int deleteByProjectId(@Param("projectId") Long projectId);
+
+    /**
+     * 逻辑删除课题全部关联单位（级联课题删除用，del_flag='2'）
+     */
+    int softDeleteByProjectId(@Param("projectId") Long projectId, @Param("updateBy") String updateBy);
 }

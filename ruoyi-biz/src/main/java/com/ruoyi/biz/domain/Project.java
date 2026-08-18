@@ -141,4 +141,8 @@ public class Project extends BaseEntity {
     /** 按单位预算列表（V1.0.23 存 project_unit_budget；主持+参与单位各一套 10 科目，聚合后写 budget_split） */
     @TableField(exist = false)
     private List<ProjectUnitBudget> unitBudgetList;
+
+    /** 参与/协作单位列表（V1.0.24 随课题新增/编辑全量保存到 project_unit，非 project 字段） */
+    @TableField(exist = false)
+    private List<ProjectUnit> unitList;
 }

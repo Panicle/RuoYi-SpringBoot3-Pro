@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -51,11 +52,13 @@ public class UserProfileController extends BaseController {
     /**
      * 可选人员选项（课题组长/成员选择器用）：全所 sys_user 列表，无数据范围过滤。
      * researcher 需选择组长/成员，此处返回全所人员（不做 @DataScope 过滤）。
+     *
+     * @param deptId 可空：按 sys_user.dept_id 过滤（如组长级联只列本二级公司人员，V1.0.24）
      */
     @PreAuthorize("@ss.hasPermi('biz:userProfile:list')")
     @GetMapping("/options")
-    public AjaxResult options() {
-        return success(userProfileService.selectUserOptions());
+    public AjaxResult options(@RequestParam(required = false) Long deptId) {
+        return success(userProfileService.selectUserOptions(deptId));
     }
 
     /**

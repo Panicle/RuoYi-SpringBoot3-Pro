@@ -51,8 +51,10 @@ public class UserProfileServiceImpl extends ServiceImpl<UserProfileMapper, UserP
     }
 
     @Override
-    public List<UserProfile> selectUserOptions() {
-        return userProfileMapper.selectChatUserList(new UserProfile());
+    public List<UserProfile> selectUserOptions(Long deptId) {
+        UserProfile query = new UserProfile();
+        query.setDeptId(deptId);
+        return userProfileMapper.selectChatUserList(query);
     }
 
     @Override

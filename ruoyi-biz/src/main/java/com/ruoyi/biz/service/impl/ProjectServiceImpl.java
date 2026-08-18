@@ -282,6 +282,9 @@ public class ProjectServiceImpl implements IProjectService {
         saveFields(project.getProjectId(), project.getFieldList(), operName);
         // 9. 按单位预算（V1.0.23）
         saveUnitBudgets(project.getProjectId(), project.getUnitBudgetList(), operName);
+        // 10. 参与/协作单位随课题保存（V1.0.24 C3：全量替换 project_unit，add/edit 权限，
+        //     不再依赖 biz:project:unit 的 addUnitBatch；unitList 为 null 时不动已有关联）
+        saveUnitLinks(project.getProjectId(), project.getUnitList(), operName);
         return project;
     }
 
@@ -329,6 +332,9 @@ public class ProjectServiceImpl implements IProjectService {
             project.setBudgetTotal(db.getBudgetTotal());
             project.setBudgetBalance(db.getBudgetBalance());
         }
+        // 参与/协作单位随课题保存（V1.0.24 C3：全量替换 project_unit；unitList 为 null 时不动已有关联，
+        // 与预算 null 语义一致，避免旧客户端/缺权限端静默清空）
+        saveUnitLinks(project.getProjectId(), project.getUnitList(), operName);
         project.setUpdateBy(operName);
         int n = projectMapper.updateById(project);
         // 研究领域多选（V1.0.21）：删旧写新（仅在请求体携带 fieldList 时更新）
@@ -364,6 +370,10 @@ public class ProjectServiceImpl implements IProjectService {
             // 经费流水 expense 的级联同事务一并落地（C-1 收口）
             budgetSplitMapper.softDeleteByProjectId(pid, operName);
             expenseMapper.softDeleteByProjectId(pid, operName);
+            // 级联清理课题关联单位（V1.0.24 修复 B2：project_unit 逻辑删 del_flag='2'）与按单位预算
+            // （project_unit_budget 物理删，与该表自身"删旧写新"生命周期一致）
+            projectUnitMapper.softDeleteByProjectId(pid, operName);
+            projectUnitBudgetMapper.deleteByProjectId(pid);
         }
         // BaseMapper.deleteByIds 走 @TableLogic 自动改写 del_flag='2'
         return projectMapper.deleteByIds(Arrays.asList(projectIds));
@@ -888,6 +898,57 @@ public class ProjectServiceImpl implements IProjectService {
             u.setDelFlag("0");
             u.setCreateBy(operName);
             projectUnitBudgetMapper.insert(u);
+        }
+    }
+
+    /**
+     * 参与/协作单位随课题保存（V1.0.24 C3）：全量替换 project_unit。
+     * 先物理删除该课题全部 project_unit 行再逐行 insert（del_flag='0'）。
+     * 双来源约定（与 addProjectUnit/addProjectUnits 一致）：
+     * 参与单位（cooperation_type=PARTICIPANT 或空）：unit_id=dept_id=集团二级公司 dept_id，校验走 sys_dept；
+     * 协作单位（COLLABORATE）：unit_id=cooperative_unit.unit_id，dept_id=null，校验走 cooperative_unit。
+     * 任一单位不存在抛业务错误整体回滚；unitList 为 null 时不动已有关联（与预算 null 语义一致），传空列表 = 清空全部。
+     * allocated_amount 本期不再单独传（插入走列 DEFAULT 0），后续如需经费划分再扩展。
+     */
+    private void saveUnitLinks(Long projectId, List<ProjectUnit> unitList, String operName) {
+        if (projectId == null || unitList == null) {
+            return;
+        }
+        projectUnitMapper.deleteByProjectId(projectId);
+        if (unitList.isEmpty()) {
+            return;
+        }
+        Set<String> seen = new HashSet<>();
+        for (ProjectUnit u : unitList) {
+            if (u == null || u.getUnitId() == null) {
+                continue;  // 过滤 null/空行
+            }
+            String cType = StringUtils.isEmpty(u.getCooperationType()) ? ROLE_PARTICIPANT : u.getCooperationType();
+            boolean isCollaborate = ROLE_COLLABORATE.equalsIgnoreCase(cType);
+            if (isCollaborate) {
+                CooperativeUnit unit = cooperativeUnitMapper.selectUnitById(u.getUnitId());
+                if (unit == null || !"0".equals(unit.getDelFlag())) {
+                    throw new ServiceException("协作单位[" + u.getUnitId() + "]不存在或已删除");
+                }
+            } else {
+                SysDept dept = sysDeptService.selectDeptById(u.getUnitId());
+                if (dept == null || !"0".equals(dept.getDelFlag())) {
+                    throw new ServiceException("二级公司[" + u.getUnitId() + "]不存在或已删除");
+                }
+            }
+            if (!seen.add(u.getUnitId() + ":" + cType)) {
+                continue;  // 同一单位同一类型重复行跳过
+            }
+            ProjectUnit pu = new ProjectUnit();
+            pu.setProjectId(projectId);
+            pu.setUnitId(u.getUnitId());
+            if (!isCollaborate) {
+                pu.setDeptId(u.getUnitId());
+            }
+            pu.setCooperationType(cType);
+            pu.setDelFlag("0");
+            pu.setCreateBy(operName);
+            projectUnitMapper.insert(pu);
         }
     }
 

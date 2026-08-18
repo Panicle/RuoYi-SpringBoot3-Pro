@@ -80,6 +80,7 @@
                d.phone,
                d.email,
                d.status,
+               d.del_flag,
                (select dept_name from sys_dept where dept_id = d.parent_id) parent_name
         from sys_dept d
         where d.dept_id = #{deptId}
