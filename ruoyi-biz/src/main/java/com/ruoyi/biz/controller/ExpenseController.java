@@ -81,6 +81,19 @@ public class ExpenseController extends BaseController {
     }
 
     /**
+     * 编辑记账：非金额字段就地更新；金额/科目变更按“作废原单+新增新单”处理
+     * （复用 add 权限，避免额外配置菜单权限串）。
+     */
+    @PreAuthorize("@ss.hasPermi('biz:expense:add')")
+    @Log(title = "经费记账编辑", businessType = BusinessType.UPDATE)
+    @PutMapping
+    @RepeatSubmit(interval = 2000, message = "请勿重复提交")
+    public AjaxResult edit(@RequestBody Expense expense) {
+        Expense saved = expenseService.updateExpense(expense, getUsername());
+        return success(saved);
+    }
+
+    /**
      * 作废（status→VOID，事务内回冲 used_amount/balance，带 @Version 乐观锁）
      * researcher 无此权限——权限串由 @PreAuthorize 强校验，403 拒绝
      */

@@ -10,6 +10,7 @@ import com.ruoyi.biz.mapper.ExpenseMapper;
 import com.ruoyi.biz.service.IBudgetService;
 import com.ruoyi.biz.service.IExpenseService;
 import com.ruoyi.biz.service.IProjectService;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.ruoyi.common.core.domain.entity.SysRole;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
@@ -142,6 +143,11 @@ public class ExpenseServiceImpl implements IExpenseService {
         // step 4. 定位 split：优先 splitId；仅传 category 时按 (projectId, category, del_flag='0') 查
         BudgetSplit split = locateSplit(expense.getProjectId(), expense.getSplitId(), expense.getCategory());
 
+        // step 4.5 记账支出不统计人工费（LABOR）
+        if ("LABOR".equals(split.getCategory())) {
+            throw new ServiceException("人工费不计入记账支出，请选择其他科目");
+        }
+
         // step 5. 预算不足校验：used + amount > budget 且 allowOverdraft=false → 拒绝
         BigDecimal used    = nz(split.getUsedAmount());
         BigDecimal budget  = nz(split.getBudgetAmount());
@@ -196,6 +202,172 @@ public class ExpenseServiceImpl implements IExpenseService {
             }
         }
         return entity;
+    }
+
+    // ========================================================
+    //  编辑（记账条目编辑：非金额字段就地更新；金额/科目变更走“作废原单+新增新单”）
+    // ========================================================
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Expense updateExpense(Expense expense, String operName) {
+        if (expense == null || expense.getExpenseId() == null) {
+            throw new ServiceException("expenseId 不能为空");
+        }
+        if (expense.getAmount() == null || expense.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ServiceException("金额必须大于 0");
+        }
+        if (expense.getExpenseDate() == null) {
+            throw new ServiceException("费用发生日期不能为空");
+        }
+
+        Expense db = expenseMapper.selectExpenseById(expense.getExpenseId());
+        if (db == null) {
+            throw new ServiceException("经费流水不存在");
+        }
+        // scoped 闸门
+        Project project = projectService.selectProjectById(db.getProjectId());
+        if (STATUS_ARCHIVED.equals(project.getStatus())) {
+            throw new ServiceException("已归档课题不可编辑记账");
+        }
+        if (STATUS_VOID.equals(db.getStatus())) {
+            throw new ServiceException("已作废的流水不可编辑");
+        }
+        if ("LABOR".equals(db.getCategory())) {
+            throw new ServiceException("人工费不计入记账支出，不可编辑");
+        }
+
+        String newCategory = StringUtils.isEmpty(expense.getCategory()) ? db.getCategory() : expense.getCategory();
+        if ("LABOR".equals(newCategory)) {
+            throw new ServiceException("人工费不计入记账支出，请选择其他科目");
+        }
+        BigDecimal oldAmount = scale(db.getAmount());
+        BigDecimal newAmount = scale(expense.getAmount());
+        boolean amountChanged = oldAmount.compareTo(newAmount) != 0;
+        boolean categoryChanged = !newCategory.equals(db.getCategory());
+
+        // 仅改日期/税率/凭证/说明：就地更新，不动历史金额与预算
+        if (!amountChanged && !categoryChanged) {
+            return updateExpenseMeta(db, expense, operName);
+        }
+
+        BudgetSplit oldSplit = budgetSplitMapper.selectByProjectAndCategory(db.getProjectId(), db.getCategory());
+        if (oldSplit == null) {
+            throw new ServiceException("原科目预算行不存在，无法编辑");
+        }
+        BudgetSplit newSplit = categoryChanged
+                ? budgetSplitMapper.selectByProjectAndCategory(db.getProjectId(), newCategory)
+                : oldSplit;
+        if (newSplit == null) {
+            throw new ServiceException("该课题未编制此科目预算");
+        }
+
+        // 编辑后可用额度：同科目 = 当前余额 + 原单金额；跨科目 = 新科目当前余额
+        BigDecimal available = categoryChanged
+                ? nz(newSplit.getBalance())
+                : scale(nz(oldSplit.getBalance()).add(oldAmount));
+        if (newAmount.compareTo(available) > 0 && !parseAllowOverdraft()) {
+            BigDecimal remain = scale(available);
+            throw new ServiceException("预算不足：科目" + newCategory + "剩余可用额 " + remain.toPlainString()
+                    + " 元，本次申请 " + newAmount.toPlainString() + " 元，超出 "
+                    + scale(newAmount.subtract(available)).toPlainString() + " 元");
+        }
+
+        // step A. 原单作废（status → VOID，带 @Version 乐观锁）
+        Expense voidUpdate = new Expense();
+        voidUpdate.setExpenseId(db.getExpenseId());
+        voidUpdate.setStatus(STATUS_VOID);
+        voidUpdate.setRemark("编辑作废：金额/科目变更，原单作废并生成新单");
+        voidUpdate.setUpdateBy(operName);
+        voidUpdate.setVersion(db.getVersion());
+        if (expenseMapper.updateById(voidUpdate) == 0) {
+            throw new ServiceException("经费流水已被他人修改，请重试");
+        }
+
+        // step B. 原科目回冲；同科目时直接合并为新金额的净变化
+        BigDecimal oldNewUsed = scale(nz(oldSplit.getUsedAmount()).subtract(oldAmount).max(BigDecimal.ZERO));
+        if (!categoryChanged) {
+            oldNewUsed = scale(oldNewUsed.add(newAmount));
+        }
+        BudgetSplit oldUpd = new BudgetSplit();
+        oldUpd.setSplitId(oldSplit.getSplitId());
+        oldUpd.setUsedAmount(oldNewUsed);
+        oldUpd.setBalance(scale(nz(oldSplit.getBudgetAmount()).subtract(oldNewUsed)));
+        oldUpd.setVersion(oldSplit.getVersion());
+        oldUpd.setUpdateBy(operName);
+        if (budgetSplitMapper.updateById(oldUpd) == 0) {
+            throw new ServiceException("预算行已被他人修改，请重试");
+        }
+
+        // step C. 跨科目时新科目核减新金额
+        if (categoryChanged) {
+            BigDecimal newUsed = scale(nz(newSplit.getUsedAmount()).add(newAmount));
+            BudgetSplit newUpd = new BudgetSplit();
+            newUpd.setSplitId(newSplit.getSplitId());
+            newUpd.setUsedAmount(newUsed);
+            newUpd.setBalance(scale(nz(newSplit.getBudgetAmount()).subtract(newUsed)));
+            newUpd.setVersion(newSplit.getVersion());
+            newUpd.setUpdateBy(operName);
+            if (budgetSplitMapper.updateById(newUpd) == 0) {
+                throw new ServiceException("预算行已被他人修改，请重试");
+            }
+        }
+
+        // step D. 新增一笔 NORMAL 流水（历史不就地改，决策 D8）
+        Expense entity = new Expense();
+        entity.setProjectId(db.getProjectId());
+        entity.setSplitId(newSplit.getSplitId());
+        entity.setAmount(newAmount);
+        entity.setTaxRate(expense.getTaxRate());
+        entity.setExpenseDate(expense.getExpenseDate());
+        entity.setCategory(newCategory);
+        entity.setStatus(STATUS_NORMAL);
+        entity.setVoucherUrl(expense.getVoucherUrl());
+        entity.setDescription(expense.getDescription());
+        entity.setDelFlag("0");
+        entity.setCreateBy(operName);
+        expenseMapper.insert(entity);
+
+        // step E. 重算课题汇总 + 双阈值预警
+        budgetService.recalcProjectBudget(db.getProjectId());
+        refreshAlert(db.getProjectId(), oldSplit.getCategory(), project, operName);
+        if (categoryChanged) {
+            refreshAlert(db.getProjectId(), newSplit.getCategory(), project, operName);
+        }
+        return entity;
+    }
+
+    private Expense updateExpenseMeta(Expense db, Expense req, String operName) {
+        LambdaUpdateWrapper<Expense> wrapper = new LambdaUpdateWrapper<Expense>()
+                .eq(Expense::getExpenseId, db.getExpenseId())
+                .eq(Expense::getVersion, db.getVersion())
+                .set(Expense::getExpenseDate, req.getExpenseDate())
+                .set(Expense::getTaxRate, req.getTaxRate())
+                .set(Expense::getVoucherUrl, req.getVoucherUrl())
+                .set(Expense::getDescription, req.getDescription())
+                .set(Expense::getUpdateBy, operName)
+                .set(Expense::getVersion, (db.getVersion() == null ? 0 : db.getVersion()) + 1);
+        if (expenseMapper.update(null, wrapper) == 0) {
+            throw new ServiceException("经费流水已被他人修改，请重试");
+        }
+        db.setExpenseDate(req.getExpenseDate());
+        db.setTaxRate(req.getTaxRate());
+        db.setVoucherUrl(req.getVoucherUrl());
+        db.setDescription(req.getDescription());
+        db.setUpdateBy(operName);
+        return db;
+    }
+
+    /** 重跑单个科目的双阈值检查并幂等落预警（不删除已有预警） */
+    private void refreshAlert(Long projectId, String category, Project project, String operName) {
+        BudgetSplit refreshed = budgetSplitMapper.selectByProjectAndCategory(projectId, category);
+        if (refreshed == null) {
+            return;
+        }
+        budgetSupport.evaluateAlert(refreshed);
+        if (Boolean.TRUE.equals(refreshed.getAlertFlag())) {
+            writeBudgetAlertIfAbsent(refreshed, project, operName);
+        }
     }
 
     // ========================================================

@@ -133,27 +133,7 @@
                     <warName>RuoyiSpringBoot3</warName>
                 </configuration>
             </plugin>
-            <plugin>
-                <!-- https://gitee.com/lcm742320521/class-final -->
-                <groupId>com.gitee.lcm742320521</groupId>
-                <artifactId>classfinal-maven-plugin</artifactId>
-                <version>1.4.1</version>
-                <configuration>
-                    <libjars>ruoyi-biz-3.9.1.jar</libjars>
-                    <packages>com.ruoyi.biz</packages>
-                    <password>RuoyiSpringBoot3@123456!</password>
-                    <code></code>
-                    <debug>true</debug>
-                </configuration>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>classFinal</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
+            <!-- classfinal-maven-plugin disabled (VerifyError on $deserializeLambda$ with Java 17) -->
         </plugins>
         <finalName>RuoyiSpringBoot3</finalName>
     </build>

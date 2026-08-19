@@ -40,6 +40,14 @@ public interface IExpenseService {
     Expense insertExpense(Expense expense, String operName);
 
     /**
+     * 编辑记账：仅日期/税率/凭证/说明等非金额字段时就地更新（乐观锁）；金额或科目变更时按决策 D8
+     * 作废原单 + 新增新单，历史金额不就地改，并同步核减/回冲 budget_split 与课题汇总。
+     *
+     * @return 落库后的流水（金额/科目变更时为新单；否则为更新后的原单）
+     */
+    Expense updateExpense(Expense expense, String operName);
+
+    /**
      * 作废（§4.2）：原单 status 必须为 NORMAL；status→VOID；同事务回冲 used_amount/balance（乐观锁）、
      * 重算课题汇总、重跑阈值检查（余额回升不删除已有 alert，留阶段9 收敛）
      *

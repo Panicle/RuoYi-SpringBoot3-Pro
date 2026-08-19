@@ -39,12 +39,11 @@ public class BudgetSupport {
 
     /** 预算科目白名单（字典 budget_category 十科目，顺序与 dict_sort 一致，对外展示按此序） */
     public static final List<String> CATEGORIES = Collections.unmodifiableList(Arrays.asList(
-            "LABOR", "EQUIPMENT", "MATERIAL", "TESTING", "FUEL", "TRAVEL", "PUBLICATION",
-            "INDIRECT", "OUTSOURCING", "TAX"));
+            "LABOR", "EQUIPMENT", "BUSINESS", "INDIRECT", "OUTSOURCING", "TAX"));
 
     /** 直接费科目（§4.4：直接费 = LABOR+EQUIPMENT+MATERIAL+TESTING+FUEL+TRAVEL+PUBLICATION） */
     public static final List<String> DIRECT_CATEGORIES = Collections.unmodifiableList(Arrays.asList(
-            "LABOR", "EQUIPMENT", "MATERIAL", "TESTING", "FUEL", "TRAVEL", "PUBLICATION"));
+            "LABOR", "EQUIPMENT", "BUSINESS"));
 
     private static final String CATEGORY_EQUIPMENT   = "EQUIPMENT";
     private static final String CATEGORY_INDIRECT    = "INDIRECT";
@@ -294,6 +293,12 @@ public class BudgetSupport {
      */
     public void evaluateAlert(BudgetSplit split) {
         if (split == null) {
+            return;
+        }
+        // 人工费不参与预算预警（仅展示，不做余额核减预警）
+        if ("LABOR".equals(split.getCategory())) {
+            split.setAlertFlag(false);
+            split.setAlertLevel(null);
             return;
         }
         BigDecimal balance = nz(split.getBalance());
